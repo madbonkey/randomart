@@ -52,6 +52,10 @@ impl<'a> Ast<'a> {
   pub fn new(root: Node<'a>) -> Self {
     Self { root }
   }
+
+  pub fn len(&self) -> usize {
+    self.root.len()
+  }
 }
 
 impl<'a> Eval for Ast<'a> {
@@ -116,6 +120,17 @@ impl<'n> Node<'n> {
   pub fn binary_fn(inner: BinaryFnNode<'n>) -> Self {
     Self::BinaryFn(inner)
   }
+
+  pub fn len(&self) -> usize {
+    match self {
+      Node::Val(inner) => inner.len(),
+      Node::Var(inner) => inner.len(),
+      Node::Color(inner) => inner.len(),
+      Node::NullaryFn(inner) => inner.len(),
+      Node::UnaryFn(inner) => inner.len(),
+      Node::BinaryFn(inner) => inner.len(),
+    }
+  }
 }
 
 #[derive(Debug)]
@@ -129,6 +144,10 @@ pub type BoxNode<'n> = Box<Node<'n>>;
 #[derive(Debug)]
 pub struct VarNode<'n> {
   name: &'n str,
+}
+
+impl<'n> VarNode<'n> {
+  pub fn len(&self) -> usize { 1 }
 }
 
 impl<'n> Eval for VarNode<'n> {
@@ -146,6 +165,10 @@ impl<'n> Eval for VarNode<'n> {
 #[derive(Debug)]
 pub struct ValNode {
   value: f32,
+}
+
+impl ValNode {
+  pub fn len(&self) -> usize { 1 }
 }
 
 impl Eval for ValNode {
@@ -170,6 +193,10 @@ impl<'n> ColorNode<'n> {
       g: g.into(),
       b: b.into(),
     }
+  }
+
+  pub fn len(&self) -> usize {
+    self.r.len() + self.g.len() + self.b.len()
   }
 }
 
@@ -200,6 +227,8 @@ pub enum NullaryFnNode {
 
 impl NullaryFnNode {
   pub fn random() -> Self { Self::Random }
+
+  pub fn len(&self) -> usize { 1 }
 }
 
 impl Eval for NullaryFnNode {
@@ -223,6 +252,14 @@ pub enum UnaryFnNode<'n> {
 impl<'n> UnaryFnNode<'n> {
   pub fn sqrt(arg: impl Into<BoxNode<'n>>) -> Self {
     Self::Sqrt(arg.into())
+  }
+
+  pub fn len(&self) -> usize {
+    let inner = match self {
+      Self::Sqrt(inner) => inner.len()
+    };
+
+    1 + inner
   }
 }
 
@@ -256,6 +293,22 @@ impl<'n> BinaryFnNode<'n> {
   pub fn add(lhs: impl Into<BoxNode<'n>>, rhs: impl Into<BoxNode<'n>>) -> Self {
     Self::Add(lhs.into(), rhs.into())
   }
+
+  pub fn mul(lhs: impl Into<BoxNode<'n>>, rhs: impl Into<BoxNode<'n>>) -> Self {
+    Self::Mul(lhs.into(), rhs.into())
+  }
+
+  pub fn len(&self) -> usize {
+    let inner = match self {
+      Self::Add(lhs, rhs) => lhs.len() + rhs.len(),
+      Self::Sub(lhs, rhs) => lhs.len() + rhs.len(),
+      Self::Mul(lhs, rhs) => lhs.len() + rhs.len(),
+      Self::Div(lhs, rhs) => lhs.len() + rhs.len(),
+      Self::Mod(lhs, rhs) => lhs.len() + rhs.len(),
+    };
+
+    1 + inner
+  }
 }
 
 impl<'n> Eval for BinaryFnNode<'n> {
@@ -274,7 +327,19 @@ impl<'n> Eval for BinaryFnNode<'n> {
           },
           nv => Err(EvalError::message(format!("lhs of binary op must eval to scalar, got {nv:?}"))),
         }
-      }
+      },
+      Self::Mul(lhs, rhs) => {
+        let lhs = lhs.eval(env)?;
+        let rhs = rhs.eval(env)?;
+
+        match lhs {
+          NodeValue::Scalar(lhs) => match rhs {
+            NodeValue::Scalar(rhs) => Ok(lhs * rhs),
+            nv => Err(EvalError::message(format!("rhs of binary op must eval to scalar, got {nv:?}"))),
+          },
+          nv => Err(EvalError::message(format!("lhs of binary op must eval to scalar, got {nv:?}"))),
+        }
+      },
       _ => Err(EvalError::message(format!("binary fn {:?} is not implemented", self))),
     }
   }
