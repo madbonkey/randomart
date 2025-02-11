@@ -1,5 +1,6 @@
 use rand::{Rng, rng};
-use crate::ast::{Ast, BinaryFnNode, ColorNode, Node, NullaryFnNode, UnaryFnNode};
+
+use crate::ast::{Ast, BinaryFnNode, ColorNode, Node, UnaryFnNode};
 
 #[derive(Debug, thiserror::Error)]
 pub enum GenError {
@@ -47,20 +48,27 @@ fn generate_node_c<'a>(rng: &mut impl Rng, d: isize) -> Result<Node<'a>, GenErro
 
   let node = if d <= 0 || r > 0.75 {
     generate_node_a(rng, d - 1)?
-  } else if r > 0.375 {
-    Node::binary_fn(
-      BinaryFnNode::add(
-        generate_node_c(rng, d - 1)?,
-        generate_node_c(rng, d - 1)?,
-      )
-    )
   } else {
-    Node::binary_fn(
-      BinaryFnNode::mul(
+    let r: f32 = rng.random();
+
+    if r > 0.75 {
+      Node::unary_fn(UnaryFnNode::sqrt(generate_node_c(rng, d - 1)?))
+    } else if r > 0.5 {
+      Node::binary_fn(BinaryFnNode::add(
         generate_node_c(rng, d - 1)?,
         generate_node_c(rng, d - 1)?,
-      )
-    )
+      ))
+    } else if r > 0.25 {
+      Node::binary_fn(BinaryFnNode::modulo(
+        generate_node_c(rng, d - 1)?,
+        generate_node_c(rng, d - 1)?,
+      ))
+    } else {
+      Node::binary_fn(BinaryFnNode::mul(
+        generate_node_c(rng, d - 1)?,
+        generate_node_c(rng, d - 1)?,
+      ))
+    }
   };
 
   Ok(node)

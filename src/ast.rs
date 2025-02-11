@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
-use std::fmt::{Debug, Display};
+use std::fmt::{Debug, Display, Formatter, Write};
+use sha256::digest;
 
 use rand::{rng, Rng};
 
@@ -56,6 +57,11 @@ impl<'a> Ast<'a> {
   pub fn len(&self) -> usize {
     self.root.len()
   }
+
+  pub fn sha256(&self) -> String {
+    let input = format!("{}", self.root);
+    digest(input)
+  }
 }
 
 impl<'a> Eval for Ast<'a> {
@@ -63,6 +69,12 @@ impl<'a> Eval for Ast<'a> {
 
   fn eval(&self, env: &Env) -> Result<Self::Out, EvalError> {
     self.root.eval(env)
+  }
+}
+
+impl Display for Ast<'_> {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    Display::fmt(&self.root, f)
   }
 }
 
@@ -133,6 +145,19 @@ impl<'n> Node<'n> {
   }
 }
 
+impl Display for Node<'_> {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Node::Val(inner) => Display::fmt(inner, f),
+      Node::Var(inner) => Display::fmt(inner, f),
+      Node::Color(inner) => Display::fmt(inner, f),
+      Node::NullaryFn(inner) => Display::fmt(inner, f),
+      Node::UnaryFn(inner) => Display::fmt(inner, f),
+      Node::BinaryFn(inner) => Display::fmt(inner, f),
+    }
+  }
+}
+
 #[derive(Debug)]
 pub enum NodeValue {
   Scalar(f32),
@@ -162,6 +187,12 @@ impl<'n> Eval for VarNode<'n> {
   }
 }
 
+impl Display for VarNode<'_> {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    f.write_str(self.name)
+  }
+}
+
 #[derive(Debug)]
 pub struct ValNode {
   value: f32,
@@ -176,6 +207,12 @@ impl Eval for ValNode {
 
   fn eval(&self, _env: &Env) -> Result<Self::Out, EvalError> {
     Ok(self.value)
+  }
+}
+
+impl Display for ValNode {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    f.write_fmt(format_args!("{:.5}", self.value))
   }
 }
 
@@ -220,6 +257,18 @@ impl<'n> Eval for ColorNode<'n> {
   }
 }
 
+impl Display for ColorNode<'_> {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    f.write_str("r := ")?;
+    Display::fmt(&self.r, f)?;
+    f.write_str("\ng := ")?;
+    Display::fmt(&self.g, f)?;
+    f.write_str("\nb := ")?;
+    Display::fmt(&self.b, f)?;
+    f.write_str("\n")
+  }
+}
+
 #[derive(Debug)]
 pub enum NullaryFnNode {
   Random,
@@ -244,9 +293,22 @@ impl Eval for NullaryFnNode {
   }
 }
 
+impl Display for NullaryFnNode {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    let name = match self {
+      Self::Random => "rand",
+    };
+
+    f.write_str(name)?;
+    f.write_str("()")
+  }
+}
+
 #[derive(Debug)]
 pub enum UnaryFnNode<'n> {
   Sqrt(BoxNode<'n>),
+  Sin(BoxNode<'n>),
+  Cos(BoxNode<'n>),
 }
 
 impl<'n> UnaryFnNode<'n> {
@@ -254,9 +316,19 @@ impl<'n> UnaryFnNode<'n> {
     Self::Sqrt(arg.into())
   }
 
+  pub fn sin(arg: impl Into<BoxNode<'n>>) -> Self {
+    Self::Sin(arg.into())
+  }
+
+  pub fn cos(arg: impl Into<BoxNode<'n>>) -> Self {
+    Self::Cos(arg.into())
+  }
+
   pub fn len(&self) -> usize {
     let inner = match self {
-      Self::Sqrt(inner) => inner.len()
+      Self::Sqrt(inner) => inner.len(),
+      Self::Sin(inner) => inner.len(),
+      Self::Cos(inner) => inner.len(),
     };
 
     1 + inner
@@ -275,7 +347,33 @@ impl<'n> Eval for UnaryFnNode<'n> {
           NodeValue::Scalar(val) => Ok(val.sqrt()),
           _ => Err(EvalError::Message(format!("cannot apply sqrt() to node value {out:?}"))),
         }
+      },
+      Self::Sin(node) => {
+        let out = node.eval(env)?;
+
+        match out {
+          NodeValue::Scalar(val) => Ok(val.sin()),
+          _ => Err(EvalError::Message(format!("cannot apply sin() to node value {out:?}"))),
+        }
+      },
+      Self::Cos(node) => {
+        let out = node.eval(env)?;
+
+        match out {
+          NodeValue::Scalar(val) => Ok(val.cos()),
+          _ => Err(EvalError::Message(format!("cannot apply cos() to node value {out:?}"))),
+        }
       }
+    }
+  }
+}
+
+impl Display for UnaryFnNode<'_> {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::Sqrt(inner) => f.write_fmt(format_args!("sqrt({inner})")),
+      Self::Sin(inner) => f.write_fmt(format_args!("sin({inner})")),
+      Self::Cos(inner) => f.write_fmt(format_args!("cos({inner})")),
     }
   }
 }
@@ -294,8 +392,20 @@ impl<'n> BinaryFnNode<'n> {
     Self::Add(lhs.into(), rhs.into())
   }
 
+  pub fn sub(lhs: impl Into<BoxNode<'n>>, rhs: impl Into<BoxNode<'n>>) -> Self {
+    Self::Sub(lhs.into(), rhs.into())
+  }
+
   pub fn mul(lhs: impl Into<BoxNode<'n>>, rhs: impl Into<BoxNode<'n>>) -> Self {
     Self::Mul(lhs.into(), rhs.into())
+  }
+
+  pub fn div(lhs: impl Into<BoxNode<'n>>, rhs: impl Into<BoxNode<'n>>) -> Self {
+    Self::Div(lhs.into(), rhs.into())
+  }
+
+  pub fn modulo(lhs: impl Into<BoxNode<'n>>, rhs: impl Into<BoxNode<'n>>) -> Self {
+    Self::Mod(lhs.into(), rhs.into())
   }
 
   pub fn len(&self) -> usize {
@@ -328,6 +438,18 @@ impl<'n> Eval for BinaryFnNode<'n> {
           nv => Err(EvalError::message(format!("lhs of binary op must eval to scalar, got {nv:?}"))),
         }
       },
+      Self::Sub(lhs, rhs) => {
+        let lhs = lhs.eval(env)?;
+        let rhs = rhs.eval(env)?;
+
+        match lhs {
+          NodeValue::Scalar(lhs) => match rhs {
+            NodeValue::Scalar(rhs) => Ok(lhs - rhs),
+            nv => Err(EvalError::message(format!("rhs of binary op must eval to scalar, got {nv:?}"))),
+          },
+          nv => Err(EvalError::message(format!("lhs of binary op must eval to scalar, got {nv:?}"))),
+        }
+      },
       Self::Mul(lhs, rhs) => {
         let lhs = lhs.eval(env)?;
         let rhs = rhs.eval(env)?;
@@ -340,7 +462,42 @@ impl<'n> Eval for BinaryFnNode<'n> {
           nv => Err(EvalError::message(format!("lhs of binary op must eval to scalar, got {nv:?}"))),
         }
       },
-      _ => Err(EvalError::message(format!("binary fn {:?} is not implemented", self))),
+      Self::Div(lhs, rhs) => {
+        let lhs = lhs.eval(env)?;
+        let rhs = rhs.eval(env)?;
+
+        match lhs {
+          NodeValue::Scalar(lhs) => match rhs {
+            NodeValue::Scalar(rhs) => Ok(lhs / rhs),
+            nv => Err(EvalError::message(format!("rhs of binary op must eval to scalar, got {nv:?}"))),
+          },
+          nv => Err(EvalError::message(format!("lhs of binary op must eval to scalar, got {nv:?}"))),
+        }
+      },
+      Self::Mod(lhs, rhs) => {
+        let lhs = lhs.eval(env)?;
+        let rhs = rhs.eval(env)?;
+
+        match lhs {
+          NodeValue::Scalar(lhs) => match rhs {
+            NodeValue::Scalar(rhs) => Ok(lhs % rhs),
+            nv => Err(EvalError::message(format!("rhs of binary op must eval to scalar, got {nv:?}"))),
+          },
+          nv => Err(EvalError::message(format!("lhs of binary op must eval to scalar, got {nv:?}"))),
+        }
+      },
+    }
+  }
+}
+
+impl Display for BinaryFnNode<'_> {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::Add(lhs, rhs) => f.write_fmt(format_args!("{lhs} + {rhs}")),
+      Self::Sub(lhs, rhs) => f.write_fmt(format_args!("{lhs} - {rhs}")),
+      Self::Mul(lhs, rhs) => f.write_fmt(format_args!("{lhs} * {rhs}")),
+      Self::Div(lhs, rhs) => f.write_fmt(format_args!("{lhs} / {rhs}")),
+      Self::Mod(lhs, rhs) => f.write_fmt(format_args!("{lhs} % {rhs}")),
     }
   }
 }

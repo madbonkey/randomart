@@ -24,21 +24,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   //
   // return Ok(());
 
-  {
+  for _ in 0..20 {
     use image::{Pixel, Rgba, RgbaImage};
 
-    let output = "output.png";
     let depth = 10;
     let size = 400u32;
     let scale = 1f32 / size as f32;
 
     let ast = generate_ast(depth)?;
+    let ast_hash = ast.sha256();
+
+    info!("ast: {ast}");
     info!("ast length: {}", ast.len());
+    info!("ast hash: {ast_hash:?}");
+
+    let output = format!("output/ast_{ast_hash}.png");
+
+    // return Ok(());
 
     let mut env = Env::default()
       .with_var("x", 0.0)
       .with_var("y", 0.0);
-    info!("env: {env:?}");
 
     let mut img = RgbaImage::new(size, size);
 
@@ -68,7 +74,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
       pix.0[3] = 255;
     }
 
-    if let Err(e) = img.save(output) {
+    if let Err(e) = img.save(&output) {
       error!("error saving image: {e}");
     } else {
       info!("saved image to {output}");
