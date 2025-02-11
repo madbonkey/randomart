@@ -5,7 +5,7 @@
 extern crate tracing;
 
 use std::time::SystemTime;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use image::RgbaImage;
 use rand::Rng;
 use rayon::iter::ParallelIterator;
@@ -19,17 +19,28 @@ mod generate;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 pub struct Cli {
-  /// Depth guide value of the function generation
-  #[arg(short, long, default_value_t = 10)]
-  depth: u8,
+  #[command(subcommand)]
+  command: Command,
+}
 
-  /// Size (width and height) of the generated image(s)
-  #[arg(short, long, default_value_t = 1024)]
-  size: u16,
+#[derive(Debug, Subcommand)]
+enum Command {
+  /// Generate random art images and save to disk
+  Generate {
+    /// Depth guide value of the function generation
+    #[arg(short, long, default_value_t = 10)]
+    depth: u8,
 
-  /// Number of images to generate
-  #[arg(short, long, default_value_t = 10)]
-  num_images: u16,
+    /// Size (width and height) of the generated image(s)
+    #[arg(short, long, default_value_t = 1024)]
+    size: u16,
+
+    /// Number of images to generate
+    #[arg(short, long, default_value_t = 10)]
+    num_images: u16,
+  },
+  /// Launch random art GUI to play around with
+  Gui {}
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -37,15 +48,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
   let cli: Cli = Cli::parse();
 
-  info!("Number of images: {}", cli.num_images);
-  info!("Image size: {}", cli.size);
-  info!("Generation depth: {}", cli.depth);
+  match cli.command {
+    Command::Generate {  depth, size, num_images } => {
+      command_generate(depth, size, num_images)?;
+    }
+    Command::Gui { .. } => {
+      todo!()
+    }
+  }
 
-  for _ in 0..cli.num_images {
+  Ok(())
+}
+
+fn command_generate(depth: u8, size: u16, num_images: u16) -> Result<(), Box<dyn std::error::Error>> {
+  info!("Number of images: {}", num_images);
+  info!("Image size: {}", size);
+  info!("Generation depth: {}", depth);
+
+  for _ in 0..num_images {
     use image::{Pixel, RgbaImage};
 
-    let depth = cli.depth;
-    let size = cli.size as u32;
+    let depth = depth;
+    let size = size as u32;
     let scale = 1f32 / size as f32;
 
     let ast = generate_ast(depth as isize)?;
