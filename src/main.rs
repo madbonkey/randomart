@@ -4,75 +4,109 @@
 #[macro_use(info, debug, error, warn)]
 extern crate tracing;
 
+use std::time::SystemTime;
+use clap::Parser;
 use image::RgbaImage;
-use rand::{rng, Rng};
+use rand::Rng;
+use rayon::iter::ParallelIterator;
+
 use crate::ast::{Env, Eval, NodeValue};
 use crate::generate::generate_ast;
 
 pub mod ast;
 mod generate;
 
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+pub struct Cli {
+  /// Depth guide value of the function generation
+  #[arg(short, long, default_value_t = 10)]
+  depth: u8,
+
+  /// Size (width and height) of the generated image(s)
+  #[arg(short, long, default_value_t = 1024)]
+  size: u16,
+
+  /// Number of images to generate
+  #[arg(short, long, default_value_t = 10)]
+  num_images: u16,
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
   tracing_subscriber::fmt().without_time().init();
 
-  info!("start");
+  let cli: Cli = Cli::parse();
 
-  // let mut rng = rng();
-  // for _ in 0..10 {
-  //   println!("{}", rng.random::<f32>() * 2. - 1.);
-  // }
-  //
-  // return Ok(());
+  info!("Number of images: {}", cli.num_images);
+  info!("Image size: {}", cli.size);
+  info!("Generation depth: {}", cli.depth);
 
-  for _ in 0..20 {
-    use image::{Pixel, Rgba, RgbaImage};
+  for _ in 0..cli.num_images {
+    use image::{Pixel, RgbaImage};
 
-    let depth = 10;
-    let size = 400u32;
+    let depth = cli.depth;
+    let size = cli.size as u32;
     let scale = 1f32 / size as f32;
 
-    let ast = generate_ast(depth)?;
+    let ast = generate_ast(depth as isize)?;
     let ast_hash = ast.sha256();
 
-    info!("ast: {ast}");
     info!("ast length: {}", ast.len());
     info!("ast hash: {ast_hash:?}");
 
     let output = format!("output/ast_{ast_hash}.png");
 
-    // return Ok(());
-
-    let mut env = Env::default()
-      .with_var("x", 0.0)
-      .with_var("y", 0.0);
+    let start = SystemTime::now();
 
     let mut img = RgbaImage::new(size, size);
 
     fn to_rgb(v: f32) -> u8 {
       let v = v * 255.0;
-      v.clamp(0.0, 255.0) as u8
+      (v.abs() % 255.0) as u8
     }
 
-    for (x, y, pix) in img.enumerate_pixels_mut() {
-      env.set_var("x", x as f32 * scale);
-      env.set_var("y", y as f32 * scale);
+    img.par_enumerate_pixels_mut().for_each(move |(x, y, pix)| {
+      let env = Env::new(x as f32 * scale, y as f32 * scale);
 
       let Ok(NodeValue::Triple(r, g, b)) = ast.eval(&env) else {
         error!("ast did not evaluate to a triple!");
-        continue;
+        return;
       };
 
       let r = to_rgb(r);
       let g = to_rgb(g);
       let b = to_rgb(b);
 
-      // println!("({x}, {y}) -> ({r}, {g}, {b})");
-
       pix.0[0] = r;
       pix.0[1] = g;
       pix.0[2] = b;
       pix.0[3] = 255;
-    }
+    });
+
+    // let mut env = Env::default();
+    // for (x, y, pix) in img.enumerate_pixels_mut() {
+    //   env.x = x as f32 * scale;
+    //   env.y = y as f32 * scale;
+    //
+    //   let Ok(NodeValue::Triple(r, g, b)) = ast.eval(&env) else {
+    //     error!("ast did not evaluate to a triple!");
+    //     continue;
+    //   };
+    //
+    //   let r = to_rgb(r);
+    //   let g = to_rgb(g);
+    //   let b = to_rgb(b);
+    //
+    //   // println!("({x}, {y}) -> ({r}, {g}, {b})");
+    //
+    //   pix.0[0] = r;
+    //   pix.0[1] = g;
+    //   pix.0[2] = b;
+    //   pix.0[3] = 255;
+    // }
+
+    let dur = SystemTime::now().duration_since(start).unwrap_or_default();
+    info!("generation took {dur:?}");
 
     if let Err(e) = img.save(&output) {
       error!("error saving image: {e}");

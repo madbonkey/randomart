@@ -12,18 +12,23 @@ pub trait Eval {
 
 #[derive(Debug, Default)]
 pub struct Env {
-  vars: BTreeMap<String, f32>,
+  pub x: f32,
+  pub y: f32,
+  // vars: BTreeMap<String, f32>,
 }
 
 impl Env {
-  pub fn set_var(&mut self, name: impl Into<String>, value: f32) {
-    self.vars.insert(name.into(), value);
+  pub fn new(x: f32, y: f32) -> Self {
+    Self { x, y }
   }
-
-  pub fn with_var(mut self, name: impl Into<String>, value: f32) -> Self {
-    self.set_var(name, value);
-    self
-  }
+  // pub fn set_var(&mut self, name: impl Into<String>, value: f32) {
+  //   self.vars.insert(name.into(), value);
+  // }
+  //
+  // pub fn with_var(mut self, name: impl Into<String>, value: f32) -> Self {
+  //   self.set_var(name, value);
+  //   self
+  // }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -45,12 +50,12 @@ impl EvalError {
 }
 
 #[derive(Debug)]
-pub struct Ast<'a> {
-  root: Node<'a>,
+pub struct Ast {
+  root: Node,
 }
 
-impl<'a> Ast<'a> {
-  pub fn new(root: Node<'a>) -> Self {
+impl Ast {
+  pub fn new(root: Node) -> Self {
     Self { root }
   }
 
@@ -64,7 +69,7 @@ impl<'a> Ast<'a> {
   }
 }
 
-impl<'a> Eval for Ast<'a> {
+impl Eval for Ast {
   type Out = NodeValue;
 
   fn eval(&self, env: &Env) -> Result<Self::Out, EvalError> {
@@ -72,23 +77,23 @@ impl<'a> Eval for Ast<'a> {
   }
 }
 
-impl Display for Ast<'_> {
+impl Display for Ast {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     Display::fmt(&self.root, f)
   }
 }
 
 #[derive(Debug)]
-pub enum Node<'n> {
+pub enum Node {
   Val(ValNode),
-  Var(VarNode<'n>),
-  Color(ColorNode<'n>),
+  Var(VarNode),
+  Color(ColorNode),
   NullaryFn(NullaryFnNode),
-  UnaryFn(UnaryFnNode<'n>),
-  BinaryFn(BinaryFnNode<'n>),
+  UnaryFn(UnaryFnNode),
+  BinaryFn(BinaryFnNode),
 }
 
-impl<'n> Eval for Node<'n> {
+impl Eval for Node {
   type Out = NodeValue;
 
   fn eval(&self, env: &Env) -> Result<Self::Out, EvalError> {
@@ -108,16 +113,16 @@ impl<'n> Eval for Node<'n> {
   }
 }
 
-impl<'n> Node<'n> {
-  pub fn var(name: &'n str) -> Self {
-    Self::Var(VarNode { name })
+impl Node {
+  pub fn var(inner: impl Into<VarNode>) -> Self {
+    Self::Var(inner.into())
   }
 
   pub fn val(value: f32) -> Self {
     Self::Val(ValNode { value })
   }
 
-  pub fn color(inner: ColorNode<'n>) -> Self {
+  pub fn color(inner: ColorNode) -> Self {
     Self::Color(inner)
   }
 
@@ -125,11 +130,11 @@ impl<'n> Node<'n> {
     Self::NullaryFn(inner)
   }
 
-  pub fn unary_fn(inner: UnaryFnNode<'n>) -> Self {
+  pub fn unary_fn(inner: UnaryFnNode) -> Self {
     Self::UnaryFn(inner)
   }
 
-  pub fn binary_fn(inner: BinaryFnNode<'n>) -> Self {
+  pub fn binary_fn(inner: BinaryFnNode) -> Self {
     Self::BinaryFn(inner)
   }
 
@@ -145,7 +150,7 @@ impl<'n> Node<'n> {
   }
 }
 
-impl Display for Node<'_> {
+impl Display for Node {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     match self {
       Node::Val(inner) => Display::fmt(inner, f),
@@ -164,32 +169,46 @@ pub enum NodeValue {
   Triple(f32, f32, f32),
 }
 
-pub type BoxNode<'n> = Box<Node<'n>>;
+pub type BoxNode = Box<Node>;
 
 #[derive(Debug)]
-pub struct VarNode<'n> {
-  name: &'n str,
+pub enum VarNode {
+  X,
+  Y,
 }
+//
+// #[derive(Debug)]
+// pub struct VarNode {
+//   name: &'n str,
+// }
 
-impl<'n> VarNode<'n> {
+impl VarNode {
   pub fn len(&self) -> usize { 1 }
 }
 
-impl<'n> Eval for VarNode<'n> {
+impl Eval for VarNode {
   type Out = f32;
 
   fn eval(&self, env: &Env) -> Result<Self::Out, EvalError> {
-    if let Some(val) = env.vars.get(self.name) {
-      Ok(*val)
-    } else {
-      Err(EvalError::message(format!("var {:?} not present in env", self.name)))
+    match self {
+      Self::X => Ok(env.x),
+      Self::Y => Ok(env.y),
     }
+    // if let Some(val) = env.vars.get(self.name) {
+    //   Ok(*val)
+    // } else {
+    //   Err(EvalError::message(format!("var {:?} not present in env", self.name)))
+    // }
   }
 }
 
-impl Display for VarNode<'_> {
+impl Display for VarNode {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    f.write_str(self.name)
+    match self {
+      VarNode::X => f.write_char('x'),
+      VarNode::Y => f.write_char('y'),
+    }
+    // f.write_str(self.name)
   }
 }
 
@@ -217,14 +236,14 @@ impl Display for ValNode {
 }
 
 #[derive(Debug)]
-pub struct ColorNode<'n> {
-  r: BoxNode<'n>,
-  g: BoxNode<'n>,
-  b: BoxNode<'n>,
+pub struct ColorNode {
+  r: BoxNode,
+  g: BoxNode,
+  b: BoxNode,
 }
 
-impl<'n> ColorNode<'n> {
-  pub fn new(r: impl Into<BoxNode<'n>>, g: impl Into<BoxNode<'n>>, b: impl Into<BoxNode<'n>>) -> Self {
+impl ColorNode {
+  pub fn new(r: impl Into<BoxNode>, g: impl Into<BoxNode>, b: impl Into<BoxNode>) -> Self {
     Self {
       r: r.into(),
       g: g.into(),
@@ -237,7 +256,7 @@ impl<'n> ColorNode<'n> {
   }
 }
 
-impl<'n> Eval for ColorNode<'n> {
+impl Eval for ColorNode {
   type Out = (f32, f32, f32);
 
   fn eval(&self, env: &Env) -> Result<Self::Out, EvalError> {
@@ -257,7 +276,7 @@ impl<'n> Eval for ColorNode<'n> {
   }
 }
 
-impl Display for ColorNode<'_> {
+impl Display for ColorNode {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     f.write_str("r := ")?;
     Display::fmt(&self.r, f)?;
@@ -305,22 +324,22 @@ impl Display for NullaryFnNode {
 }
 
 #[derive(Debug)]
-pub enum UnaryFnNode<'n> {
-  Sqrt(BoxNode<'n>),
-  Sin(BoxNode<'n>),
-  Cos(BoxNode<'n>),
+pub enum UnaryFnNode {
+  Sqrt(BoxNode),
+  Sin(BoxNode),
+  Cos(BoxNode),
 }
 
-impl<'n> UnaryFnNode<'n> {
-  pub fn sqrt(arg: impl Into<BoxNode<'n>>) -> Self {
+impl UnaryFnNode {
+  pub fn sqrt(arg: impl Into<BoxNode>) -> Self {
     Self::Sqrt(arg.into())
   }
 
-  pub fn sin(arg: impl Into<BoxNode<'n>>) -> Self {
+  pub fn sin(arg: impl Into<BoxNode>) -> Self {
     Self::Sin(arg.into())
   }
 
-  pub fn cos(arg: impl Into<BoxNode<'n>>) -> Self {
+  pub fn cos(arg: impl Into<BoxNode>) -> Self {
     Self::Cos(arg.into())
   }
 
@@ -335,7 +354,7 @@ impl<'n> UnaryFnNode<'n> {
   }
 }
 
-impl<'n> Eval for UnaryFnNode<'n> {
+impl Eval for UnaryFnNode {
   type Out = f32;
 
   fn eval(&self, env: &Env) -> Result<Self::Out, EvalError> {
@@ -368,7 +387,7 @@ impl<'n> Eval for UnaryFnNode<'n> {
   }
 }
 
-impl Display for UnaryFnNode<'_> {
+impl Display for UnaryFnNode {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     match self {
       Self::Sqrt(inner) => f.write_fmt(format_args!("sqrt({inner})")),
@@ -379,32 +398,32 @@ impl Display for UnaryFnNode<'_> {
 }
 
 #[derive(Debug)]
-pub enum BinaryFnNode<'n> {
-  Add(BoxNode<'n>, BoxNode<'n>),
-  Sub(BoxNode<'n>, BoxNode<'n>),
-  Mul(BoxNode<'n>, BoxNode<'n>),
-  Div(BoxNode<'n>, BoxNode<'n>),
-  Mod(BoxNode<'n>, BoxNode<'n>),
+pub enum BinaryFnNode {
+  Add(BoxNode, BoxNode),
+  Sub(BoxNode, BoxNode),
+  Mul(BoxNode, BoxNode),
+  Div(BoxNode, BoxNode),
+  Mod(BoxNode, BoxNode),
 }
 
-impl<'n> BinaryFnNode<'n> {
-  pub fn add(lhs: impl Into<BoxNode<'n>>, rhs: impl Into<BoxNode<'n>>) -> Self {
+impl BinaryFnNode {
+  pub fn add(lhs: impl Into<BoxNode>, rhs: impl Into<BoxNode>) -> Self {
     Self::Add(lhs.into(), rhs.into())
   }
 
-  pub fn sub(lhs: impl Into<BoxNode<'n>>, rhs: impl Into<BoxNode<'n>>) -> Self {
+  pub fn sub(lhs: impl Into<BoxNode>, rhs: impl Into<BoxNode>) -> Self {
     Self::Sub(lhs.into(), rhs.into())
   }
 
-  pub fn mul(lhs: impl Into<BoxNode<'n>>, rhs: impl Into<BoxNode<'n>>) -> Self {
+  pub fn mul(lhs: impl Into<BoxNode>, rhs: impl Into<BoxNode>) -> Self {
     Self::Mul(lhs.into(), rhs.into())
   }
 
-  pub fn div(lhs: impl Into<BoxNode<'n>>, rhs: impl Into<BoxNode<'n>>) -> Self {
+  pub fn div(lhs: impl Into<BoxNode>, rhs: impl Into<BoxNode>) -> Self {
     Self::Div(lhs.into(), rhs.into())
   }
 
-  pub fn modulo(lhs: impl Into<BoxNode<'n>>, rhs: impl Into<BoxNode<'n>>) -> Self {
+  pub fn modulo(lhs: impl Into<BoxNode>, rhs: impl Into<BoxNode>) -> Self {
     Self::Mod(lhs.into(), rhs.into())
   }
 
@@ -421,7 +440,7 @@ impl<'n> BinaryFnNode<'n> {
   }
 }
 
-impl<'n> Eval for BinaryFnNode<'n> {
+impl Eval for BinaryFnNode {
   type Out = f32;
 
   fn eval(&self, env: &Env) -> Result<Self::Out, EvalError> {
@@ -490,7 +509,7 @@ impl<'n> Eval for BinaryFnNode<'n> {
   }
 }
 
-impl Display for BinaryFnNode<'_> {
+impl Display for BinaryFnNode {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     match self {
       Self::Add(lhs, rhs) => f.write_fmt(format_args!("{lhs} + {rhs}")),

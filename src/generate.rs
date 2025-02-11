@@ -1,6 +1,6 @@
 use rand::{Rng, rng};
 
-use crate::ast::{Ast, BinaryFnNode, ColorNode, Node, UnaryFnNode};
+use crate::ast::{Ast, BinaryFnNode, ColorNode, Node, UnaryFnNode, VarNode};
 
 #[derive(Debug, thiserror::Error)]
 pub enum GenError {
@@ -10,14 +10,14 @@ pub enum GenError {
   Message(String),
 }
 
-pub fn generate_ast<'a>(d: isize) -> Result<Ast<'a>, GenError> {
+pub fn generate_ast(d: isize) -> Result<Ast, GenError> {
   let mut rng = rng();
   let root = generate_node_e(&mut rng, d)?;
   let ast = Ast::new(root);
   Ok(ast)
 }
 
-fn generate_node_e<'a>(rng: &mut impl Rng, d: isize) -> Result<Node<'a>, GenError> {
+fn generate_node_e(rng: &mut impl Rng, d: isize) -> Result<Node, GenError> {
   let node = Node::color(
     ColorNode::new(
       generate_node_c(rng, d - 1)?,
@@ -29,21 +29,21 @@ fn generate_node_e<'a>(rng: &mut impl Rng, d: isize) -> Result<Node<'a>, GenErro
   Ok(node)
 }
 
-fn generate_node_a<'a>(rng: &mut impl Rng, _d: isize) -> Result<Node<'a>, GenError> {
+fn generate_node_a(rng: &mut impl Rng, _d: isize) -> Result<Node, GenError> {
   let r: f32 = rng.random();
 
   let node = if r > 0.66 {
     Node::val(rng.random::<f32>() * 2. - 1.)
   } else if r > 0.33 {
-    Node::var("x")
+    Node::var(VarNode::X)
   } else {
-    Node::var("y")
+    Node::var(VarNode::Y)
   };
 
   Ok(node)
 }
 
-fn generate_node_c<'a>(rng: &mut impl Rng, d: isize) -> Result<Node<'a>, GenError> {
+fn generate_node_c(rng: &mut impl Rng, d: isize) -> Result<Node, GenError> {
   let r: f32 = rng.random();
 
   let node = if d <= 0 || r > 0.75 {
@@ -51,14 +51,16 @@ fn generate_node_c<'a>(rng: &mut impl Rng, d: isize) -> Result<Node<'a>, GenErro
   } else {
     let r: f32 = rng.random();
 
-    if r > 0.75 {
+    if r > 0.8 {
       Node::unary_fn(UnaryFnNode::sqrt(generate_node_c(rng, d - 1)?))
-    } else if r > 0.5 {
+    } else if r > 0.6 {
+      Node::unary_fn(UnaryFnNode::sin(generate_node_c(rng, d - 1)?))
+    } else if r > 0.4 {
       Node::binary_fn(BinaryFnNode::add(
         generate_node_c(rng, d - 1)?,
         generate_node_c(rng, d - 1)?,
       ))
-    } else if r > 0.25 {
+    } else if r > 0.2 {
       Node::binary_fn(BinaryFnNode::modulo(
         generate_node_c(rng, d - 1)?,
         generate_node_c(rng, d - 1)?,
@@ -69,6 +71,25 @@ fn generate_node_c<'a>(rng: &mut impl Rng, d: isize) -> Result<Node<'a>, GenErro
         generate_node_c(rng, d - 1)?,
       ))
     }
+
+    // if r > 0.75 {
+    //   Node::unary_fn(UnaryFnNode::sqrt(generate_node_c(rng, d - 1)?))
+    // } else if r > 0.5 {
+    //   Node::binary_fn(BinaryFnNode::add(
+    //     generate_node_c(rng, d - 1)?,
+    //     generate_node_c(rng, d - 1)?,
+    //   ))
+    // } else if r > 0.25 {
+    //   Node::binary_fn(BinaryFnNode::modulo(
+    //     generate_node_c(rng, d - 1)?,
+    //     generate_node_c(rng, d - 1)?,
+    //   ))
+    // } else {
+    //   Node::binary_fn(BinaryFnNode::mul(
+    //     generate_node_c(rng, d - 1)?,
+    //     generate_node_c(rng, d - 1)?,
+    //   ))
+    // }
   };
 
   Ok(node)
