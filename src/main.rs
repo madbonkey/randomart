@@ -7,7 +7,8 @@ extern crate tracing;
 use std::time::SystemTime;
 use clap::{Parser, Subcommand};
 use image::RgbaImage;
-use rand::Rng;
+use rand::{Rng, rng, SeedableRng};
+use rand::rngs::StdRng;
 use rayon::iter::ParallelIterator;
 
 use crate::ast::{Env, Eval, NodeValue};
@@ -38,6 +39,10 @@ enum Command {
     /// Number of images to generate
     #[arg(short, long, default_value_t = 10)]
     num_images: u16,
+
+    /// Seed for the RNG
+    #[arg(long, default_value_t = 1337)]
+    seed: u64,
   },
   /// Launch random art GUI to play around with
   Gui {}
@@ -49,8 +54,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   let cli: Cli = Cli::parse();
 
   match cli.command {
-    Command::Generate {  depth, size, num_images } => {
-      command_generate(depth, size, num_images)?;
+    Command::Generate {  depth, size, num_images, seed } => {
+      command_generate(depth, size, num_images, seed)?;
     }
     Command::Gui { .. } => {
       todo!()
@@ -60,19 +65,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   Ok(())
 }
 
-fn command_generate(depth: u8, size: u16, num_images: u16) -> Result<(), Box<dyn std::error::Error>> {
-  info!("Number of images: {}", num_images);
+fn seeded_rng(seed: u64) -> impl Rng {
+  let seed: [u8; 8] = seed.to_be_bytes();
+
+  StdRng::from_seed([
+    0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,
+    seed[0], seed[1], seed[2], seed[3],
+    seed[4], seed[5], seed[6], seed[7],
+  ])
+}
+
+fn command_generate(depth: u8, size: u16, num_images: u16, seed: u64) -> Result<(), Box<dyn std::error::Error>> {
+  info!("Image count: {}", num_images);
   info!("Image size: {}", size);
   info!("Generation depth: {}", depth);
+  info!("Generation seed: {}", seed);
+
+  let mut rng = seeded_rng(seed);
+  let depth = depth;
+  let size = size as u32;
+  let scale = 1f32 / size as f32;
 
   for _ in 0..num_images {
     use image::{Pixel, RgbaImage};
 
-    let depth = depth;
-    let size = size as u32;
-    let scale = 1f32 / size as f32;
-
-    let ast = generate_ast(depth as isize)?;
+    let ast = generate_ast(&mut rng, depth as isize)?;
     let ast_hash = ast.sha256();
 
     info!("ast length: {}", ast.len());

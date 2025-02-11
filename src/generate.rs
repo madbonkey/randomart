@@ -1,4 +1,4 @@
-use rand::{Rng, rng};
+use rand::Rng;
 
 use crate::ast::{Ast, BinaryFnNode, ColorNode, Node, UnaryFnNode, VarNode};
 
@@ -10,9 +10,8 @@ pub enum GenError {
   Message(String),
 }
 
-pub fn generate_ast(d: isize) -> Result<Ast, GenError> {
-  let mut rng = rng();
-  let root = generate_node_e(&mut rng, d)?;
+pub fn generate_ast(rng: &mut impl Rng, d: isize) -> Result<Ast, GenError> {
+  let root = generate_node_e(rng, d)?;
   let ast = Ast::new(root);
   Ok(ast)
 }
