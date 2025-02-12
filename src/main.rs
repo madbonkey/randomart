@@ -5,9 +5,11 @@
 extern crate tracing;
 
 use std::time::SystemTime;
+
 use clap::{Parser, Subcommand};
 use image::RgbaImage;
-use rand::{Rng, rng, SeedableRng};
+use macroquad::prelude::DrawTextureParams;
+use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 use rayon::iter::ParallelIterator;
 
@@ -45,7 +47,7 @@ enum Command {
     seed: u64,
   },
   /// Launch random art GUI to play around with
-  Gui {}
+  Gui {},
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -54,11 +56,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   let cli: Cli = Cli::parse();
 
   match cli.command {
-    Command::Generate {  depth, size, num_images, seed } => {
+    Command::Generate { depth, size, num_images, seed } => {
       command_generate(depth, size, num_images, seed)?;
     }
     Command::Gui { .. } => {
-      todo!()
+      command_gui()?;
     }
   }
 
@@ -69,9 +71,9 @@ fn seeded_rng(seed: u64) -> impl Rng {
   let seed: [u8; 8] = seed.to_be_bytes();
 
   StdRng::from_seed([
-    0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
     seed[0], seed[1], seed[2], seed[3],
     seed[4], seed[5], seed[6], seed[7],
   ])
@@ -126,28 +128,6 @@ fn command_generate(depth: u8, size: u16, num_images: u16, seed: u64) -> Result<
       pix.0[3] = 255;
     });
 
-    // let mut env = Env::default();
-    // for (x, y, pix) in img.enumerate_pixels_mut() {
-    //   env.x = x as f32 * scale;
-    //   env.y = y as f32 * scale;
-    //
-    //   let Ok(NodeValue::Triple(r, g, b)) = ast.eval(&env) else {
-    //     error!("ast did not evaluate to a triple!");
-    //     continue;
-    //   };
-    //
-    //   let r = to_rgb(r);
-    //   let g = to_rgb(g);
-    //   let b = to_rgb(b);
-    //
-    //   // println!("({x}, {y}) -> ({r}, {g}, {b})");
-    //
-    //   pix.0[0] = r;
-    //   pix.0[1] = g;
-    //   pix.0[2] = b;
-    //   pix.0[3] = 255;
-    // }
-
     let dur = SystemTime::now().duration_since(start).unwrap_or_default();
     info!("generation took {dur:?}");
 
@@ -160,3 +140,71 @@ fn command_generate(depth: u8, size: u16, num_images: u16, seed: u64) -> Result<
 
   Ok(())
 }
+
+fn command_gui() -> Result<(), Box<dyn std::error::Error>> {
+  let conf = macroquad::window::Conf {
+    window_title: "Test".to_owned(),
+    window_width: 800,
+    window_height: 600,
+    high_dpi: true,
+    window_resizable: true,
+    ..Default::default()
+  };
+
+  macroquad::Window::from_config(conf, command_gui_main());
+
+  Ok(())
+}
+
+async fn command_gui_main() {
+  use macroquad::prelude::*;
+
+  const DEFAULT_VERTEX_SHADER: &'static str = /*language=glsl*/ "#version 100
+    precision mediump float;
+    attribute vec3 position;
+    attribute vec2 texcoord;
+
+    varying lowp vec2 uv;
+
+    uniform mat4 Model;
+    uniform mat4 Projection;
+
+    void main() {
+        gl_Position = Projection * Model * vec4(position, 1);
+        uv = texcoord;
+    }
+  ";
+
+  const DEFAULT_FRAGMENT_SHADER: &'static str = /*language=glsl*/ "#version 100
+    precision mediump float;
+    varying vec2 uv;
+    void main() {
+        gl_FragColor = vec4(uv, 0, 1);
+    }
+  ";
+
+  let vertex_shader = DEFAULT_VERTEX_SHADER.to_string();
+  let fragment_shader = DEFAULT_FRAGMENT_SHADER.to_string();
+
+  let material = load_material(
+    ShaderSource::Glsl {
+      vertex: &vertex_shader,
+      fragment: &fragment_shader,
+    },
+    MaterialParams::default(),
+  )
+    .expect("load material");
+
+  loop {
+    clear_background(BLACK);
+
+    gl_use_material(&material);
+    draw_rectangle(0., 0., screen_width(), screen_height(), BLANK);
+    gl_use_default_material();
+
+    draw_text(format!("FPS: {:0>3}", get_fps()).as_str(), 4., 20., 24., WHITE);
+
+    next_frame().await
+  }
+}
+
