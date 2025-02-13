@@ -162,6 +162,7 @@ async fn command_gui_main() {
 
   let (mut ast, mut material) = load_shader_material(&mut rng, depth);
 
+  let mut show_hud = true;
   let mut paused = false;
   let mut t = 0f32;
 
@@ -179,7 +180,9 @@ async fn command_gui_main() {
       let next_depth = depth - if is_key_down(KeyCode::LeftShift) { 10 } else { 1 };
       depth = next_depth.clamp(1, MAX_DEPTH);
     } else if is_key_pressed(KeyCode::A) {
-      println!("AST:\n{ast}");
+      tracing::info!("AST:\n{ast}");
+    } else if is_key_pressed(KeyCode::H) {
+      show_hud = !show_hud;
     }
 
     clear_background(BLACK);
@@ -194,9 +197,12 @@ async fn command_gui_main() {
     draw_rectangle(0., 0., screen_width(), screen_height(), BLANK);
     gl_use_default_material();
 
-    draw_text(format!("FPS : {:0>4}", get_fps()).as_str(), 4., 20., 24., WHITE);
-    draw_text(format!("D   : {:0>4}", depth).as_str(), 4., 40., 24., WHITE);
-    draw_text(format!("T   : {:.2}", (t.sin() + 1.0) / 2.0).as_str(), 4., 60., 24., WHITE);
+    if show_hud {
+      draw_rectangle(0., 0., 120., 70., Color::from_rgba(0, 0, 0, 190));
+      draw_text(format!("FPS : {:0>4}", get_fps()).as_str(), 4., 20., 24., WHITE);
+      draw_text(format!("D   : {:0>4}", depth).as_str(), 4., 40., 24., WHITE);
+      draw_text(format!("T   : {:.2}", (t.sin() + 1.0) / 2.0).as_str(), 4., 60., 24., WHITE);
+    }
 
     next_frame().await
   }

@@ -42,8 +42,6 @@ const FRAGMENT_SHADER_END: &str = "
 pub fn load_shader_material(rng: &mut impl Rng, depth: isize) -> (Ast, Material) {
   let ast = generate_ast_grammar(rng, depth).expect("ast generation");
 
-  info!("generated AST:\n{ast}");
-
   let vertex_shader = DEFAULT_VERTEX_SHADER.to_string();
   let fragment_shader = compile_fragment_shader(&ast);
 
