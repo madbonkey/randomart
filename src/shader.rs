@@ -1,9 +1,10 @@
 use std::fmt::Write;
+
 use macroquad::material::{load_material, Material, MaterialParams};
 use macroquad::miniquad::{ShaderSource, UniformDesc, UniformType};
 use rand::Rng;
 
-use crate::ast::{Ast, BinaryFnNode, BoxNode, Node, UnaryFnNode, VarNode};
+use crate::ast::{Ast, FnNode, Node, VarNode};
 use crate::generate::generate_ast_hardcoded;
 
 const DEFAULT_VERTEX_SHADER: &str = /*language=glsl*/ "#version 100
@@ -54,7 +55,7 @@ pub fn load_shader_material(rng: &mut impl Rng, depth: isize) -> (Ast, Material)
         UniformDesc::new("elapsed", UniformType::Float1),
       ],
       ..Default::default()
-    }
+    },
   ).expect("load material");
 
   (ast, material)
@@ -64,18 +65,29 @@ fn compile_fragment_shader(ast: &Ast) -> String {
   let mut s = String::from(FRAGMENT_SHADER_START);
   let root = ast.root();
 
-  compile_fragment_shader_node(root, &mut s);
+  let (r, g, b) = root.nodes();
 
-  s.push(';');
+  let r = compile_fragment_shader_node_temp(r);
+  let g = compile_fragment_shader_node_temp(g);
+  let b = compile_fragment_shader_node_temp(b);
+
+  write!(&mut s, "vec3({r}, {g}, {b});").expect("write ColorNode");
+
   s.push_str(FRAGMENT_SHADER_END);
 
   s
 }
 
+fn compile_fragment_shader_node_temp(node: &Node) -> String {
+  let mut temp = String::new();
+  compile_fragment_shader_node(node, &mut temp);
+  temp
+}
+
 fn compile_fragment_shader_node(node: &Node, out: &mut String) {
   match node {
-    Node::Val(inner) => {
-      write!(out, "{}", inner.value()).expect("write Node::Val");
+    Node::Scalar(inner) => {
+      write!(out, "{}", inner.value()).expect("write Node::Scalar");
     }
     Node::Var(inner) => {
       let c = match inner {
@@ -86,7 +98,7 @@ fn compile_fragment_shader_node(node: &Node, out: &mut String) {
       out.push(c);
     }
     Node::Color(inner) => {
-      let (r, g, b) = inner.value();
+      let (r, g, b) = inner.nodes();
 
       out.push_str("vec3(");
       compile_fragment_shader_node(r, out);
@@ -96,62 +108,46 @@ fn compile_fragment_shader_node(node: &Node, out: &mut String) {
       compile_fragment_shader_node(b, out);
       out.push(')');
     }
-    Node::UnaryFn(inner) => {
-      match inner {
-        UnaryFnNode::Sqrt(inner) => {
-          out.push_str("sqrt(");
-          compile_fragment_shader_node(inner, out);
-          out.push(')');
-        }
-        UnaryFnNode::Sin(inner) => {
-          out.push_str("sin(");
-          compile_fragment_shader_node(inner, out);
-          out.push(')');
-        }
-        UnaryFnNode::Cos(inner) => {
-          out.push_str("cos(");
-          compile_fragment_shader_node(inner, out);
-          out.push(')');
-        }
-      }
+    Node::Fn(inner) => {
+      compile_fragment_shader_node_fn(inner, out);
     }
-    Node::BinaryFn(inner) => {
-      match inner {
-        BinaryFnNode::Add(lhs, rhs) => {
-          compile_fragment_shader_node_binary_fn(lhs, rhs, "+", out);
-        }
-        BinaryFnNode::Sub(lhs, rhs) => {
-          compile_fragment_shader_node_binary_fn(lhs, rhs, "-", out);
-        }
-        BinaryFnNode::Mul(lhs, rhs) => {
-          compile_fragment_shader_node_binary_fn(lhs, rhs, "*", out);
-        }
-        BinaryFnNode::Div(lhs, rhs) => {
-          compile_fragment_shader_node_binary_fn(lhs, rhs, "/", out);
-        }
-        BinaryFnNode::Mod(lhs, rhs) => {
-          out.push_str("mod(");
-          compile_fragment_shader_node(lhs, out);
-          out.push(',');
-          compile_fragment_shader_node(rhs, out);
-          out.push(')');
-        }
-      }
-    }
-    Node::NullaryFn(_) => panic!("nullary fns are not part of the shader compilation process"),
   }
 }
 
-fn compile_fragment_shader_node_binary_fn(lhs: &BoxNode, rhs: &BoxNode, op: &str, out: &mut String) {
-  // out.push('(');
-  // out.push(')');
-
-  compile_fragment_shader_node(lhs, out);
-  out.push(' ');
-  out.push_str(op);
-  out.push(' ');
-  compile_fragment_shader_node(rhs, out);
-
-  // out.push('(');
-  // out.push(')');
+fn compile_fragment_shader_node_fn(node: &FnNode, out: &mut String) {
+  match node {
+    FnNode::Sqrt(inner) => {
+      out.push_str("sqrt(");
+      compile_fragment_shader_node(inner, out);
+      out.push(')');
+    }
+    FnNode::Sin(inner) => {
+      out.push_str("sin(");
+      compile_fragment_shader_node(inner, out);
+      out.push(')');
+    }
+    FnNode::Cos(inner) => {
+      out.push_str("cos(");
+      compile_fragment_shader_node(inner, out);
+      out.push(')');
+    }
+    FnNode::Add(l, r) => {
+      compile_fragment_shader_node(l, out);
+      out.push('+');
+      compile_fragment_shader_node(r, out);
+    }
+    FnNode::Mul(l, r) => {
+      compile_fragment_shader_node(l, out);
+      out.push('*');
+      compile_fragment_shader_node(r, out);
+    }
+    FnNode::Mod(l, r) => {
+      out.push_str("mod(");
+      compile_fragment_shader_node(l, out);
+      out.push(',');
+      compile_fragment_shader_node(r, out);
+      out.push(')');
+    }
+  }
 }
+

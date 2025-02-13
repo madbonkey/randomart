@@ -11,7 +11,7 @@ use rand::{Rng, rng, SeedableRng};
 use rand::rngs::StdRng;
 use rayon::iter::ParallelIterator;
 
-use crate::ast::{Env, Eval, NodeValue};
+use crate::ast::{Env, Eval};
 use crate::generate::generate_ast_hardcoded;
 use crate::shader::load_shader_material;
 
@@ -85,7 +85,6 @@ fn command_generate(depth: u8, size: u16, num_images: u16, seed: u64) -> Result<
     let ast = generate_ast_hardcoded(&mut rng, depth as isize)?;
     let ast_hash = ast.sha256();
 
-    info!("ast length: {}", ast.len());
     info!("ast hash: {ast_hash:?}");
 
     let output = format!("output/ast_{ast_hash}.png");
@@ -102,7 +101,7 @@ fn command_generate(depth: u8, size: u16, num_images: u16, seed: u64) -> Result<
     img.par_enumerate_pixels_mut().for_each(move |(x, y, pix)| {
       let env = Env::new(x as f32 * scale, y as f32 * scale);
 
-      let Ok(NodeValue::Triple(r, g, b)) = ast.eval(&env) else {
+      let Ok((r, g, b)) = ast.eval(&env) else {
         error!("ast did not evaluate to a triple!");
         return;
       };
@@ -175,7 +174,7 @@ async fn command_gui_main() {
     } else if is_key_pressed(KeyCode::Slash) && depth > 1 {
       depth -= 1;
     } else if is_key_pressed(KeyCode::A) {
-      println!("AST ({}):\n{ast}", ast.len());
+      println!("AST:\n{ast}");
     }
 
     clear_background(BLACK);
