@@ -12,11 +12,11 @@ use rand::rngs::StdRng;
 use rayon::iter::ParallelIterator;
 
 use crate::ast::{Env, Eval};
-use crate::generate::generate_ast_grammar;
+use crate::grammar::Grammar;
 use crate::shader::load_shader_material;
 
 pub mod ast;
-pub mod generate;
+pub mod grammar;
 pub mod shader;
 
 #[derive(Parser, Debug)]
@@ -76,14 +76,14 @@ fn command_generate(depth: u8, size: u16, num_images: u16, seed: u64) -> Result<
   info!("Generation seed: {}", seed);
 
   let mut rng = seeded_rng(seed);
+  let grammar = Grammar::new_sample();
   let size = size as u32;
   let scale = 1f32 / size as f32;
 
   for _ in 0..num_images {
     use image::RgbaImage;
 
-    // let ast = generate_ast_hardcoded(&mut rng, depth as isize)?;
-    let ast = generate_ast_grammar(&mut rng, depth as isize)?;
+    let ast = grammar.generate_ast(&mut rng, depth as isize)?;
     let ast_hash = ast.sha256();
 
     info!("ast hash: {ast_hash:?}");
@@ -161,7 +161,9 @@ async fn command_gui_main() {
 
   let mut rng = seeded_rng(seed);
 
-  let (mut ast, mut material) = load_shader_material(&mut rng, depth);
+  let grammar = Grammar::new_sample();
+
+  let (mut ast, mut material) = load_shader_material(&grammar, &mut rng, depth);
 
   let mut show_hud = true;
   let mut paused = false;
@@ -169,7 +171,7 @@ async fn command_gui_main() {
 
   loop {
     if is_key_pressed(KeyCode::R) {
-      let (a, m) = load_shader_material(&mut rng, depth);
+      let (a, m) = load_shader_material(&grammar, &mut rng, depth);
       ast = a;
       material = m;
     } else if is_key_pressed(KeyCode::Space) {

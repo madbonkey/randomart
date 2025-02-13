@@ -21,7 +21,96 @@ pub struct Grammar {
 }
 
 impl Grammar {
-  pub fn generate(&self, rng: &mut impl Rng, initial_rule: RuleId, depth: isize) -> Result<Node, GenError> {
+  pub fn new_sample() -> Self {
+    Self {
+      rules: vec![
+        Rule {
+          id: 'E',
+          branches: vec![
+            Branch {
+              weight: 1,
+              kind: BranchKind::Color(ColorBranch {
+                r: Box::new(BranchKind::Rule('C')),
+                g: Box::new(BranchKind::Rule('C')),
+                b: Box::new(BranchKind::Rule('C')),
+              }),
+            }
+          ],
+        },
+        Rule {
+          id: 'C',
+          branches: vec![
+            Branch {
+              weight: 2,
+              kind: BranchKind::Rule('A'),
+            },
+            Branch {
+              weight: 3,
+              kind: BranchKind::Fn(FnBranch::Add(
+                Box::new(BranchKind::Rule('C')),
+                Box::new(BranchKind::Rule('C')),
+              )),
+            },
+            Branch {
+              weight: 3,
+              kind: BranchKind::Fn(FnBranch::Mul(
+                Box::new(BranchKind::Rule('C')),
+                Box::new(BranchKind::Rule('C')),
+              )),
+            },
+            Branch {
+              weight: 3,
+              kind: BranchKind::Fn(FnBranch::Sqrt(
+                Box::new(BranchKind::Rule('C')),
+              )),
+            },
+            Branch {
+              weight: 3,
+              kind: BranchKind::Fn(FnBranch::Sin(
+                Box::new(BranchKind::Rule('C')),
+              )),
+            },
+          ],
+        },
+        Rule {
+          id: 'A',
+          branches: vec![
+            Branch {
+              weight: 1,
+              kind: BranchKind::Fn(FnBranch::Random),
+            },
+            Branch {
+              weight: 1,
+              kind: BranchKind::Var('x'),
+            },
+            Branch {
+              weight: 1,
+              kind: BranchKind::Var('y'),
+            },
+            Branch {
+              weight: 1,
+              kind: BranchKind::Var('t'),
+            },
+          ],
+        },
+      ]
+    }
+  }
+
+  pub fn generate_ast(&self, rng: &mut impl Rng, depth: isize) -> Result<Ast, GenError> {
+    let node = self.generate_node(rng, 'E', depth)?;
+
+    match node {
+      Node::Color(color) => {
+        Ok(Ast::new(color))
+      }
+      _ => {
+        Err(GenError::Unknown)
+      }
+    }
+  }
+
+  fn generate_node(&self, rng: &mut impl Rng, initial_rule: RuleId, depth: isize) -> Result<Node, GenError> {
     // (1)
     let root = self.find_rule(initial_rule).ok_or(GenError::RuleNotFound(initial_rule))?;
 
@@ -135,7 +224,7 @@ impl BranchKind {
   fn generate_node(&self, rng: &mut impl Rng, grammar: &Grammar, depth: isize) -> Result<Node, GenError> {
     match self {
       BranchKind::Rule(rid) => {
-        grammar.generate(rng, *rid, depth - 1)
+        grammar.generate_node(rng, *rid, depth - 1)
       }
       BranchKind::Var(v) => {
         let v = match v {
@@ -208,88 +297,3 @@ pub enum FnBranch {
   Cos(Box<BranchKind>),
 }
 
-pub fn generate_ast_grammar(rng: &mut impl Rng, d: isize) -> Result<Ast, GenError> {
-  let grammar = Grammar {
-    rules: vec![
-      Rule {
-        id: 'E',
-        branches: vec![
-          Branch {
-            weight: 1,
-            kind: BranchKind::Color(ColorBranch {
-              r: Box::new(BranchKind::Rule('C')),
-              g: Box::new(BranchKind::Rule('C')),
-              b: Box::new(BranchKind::Rule('C')),
-            }),
-          }
-        ],
-      },
-      Rule {
-        id: 'C',
-        branches: vec![
-          Branch {
-            weight: 2,
-            kind: BranchKind::Rule('A'),
-          },
-          Branch {
-            weight: 3,
-            kind: BranchKind::Fn(FnBranch::Add(
-              Box::new(BranchKind::Rule('C')),
-              Box::new(BranchKind::Rule('C')),
-            )),
-          },
-          Branch {
-            weight: 3,
-            kind: BranchKind::Fn(FnBranch::Mul(
-              Box::new(BranchKind::Rule('C')),
-              Box::new(BranchKind::Rule('C')),
-            )),
-          },
-          Branch {
-            weight: 3,
-            kind: BranchKind::Fn(FnBranch::Sqrt(
-              Box::new(BranchKind::Rule('C')),
-            )),
-          },
-          Branch {
-            weight: 3,
-            kind: BranchKind::Fn(FnBranch::Sin(
-              Box::new(BranchKind::Rule('C')),
-            )),
-          },
-        ],
-      },
-      Rule {
-        id: 'A',
-        branches: vec![
-          Branch {
-            weight: 1,
-            kind: BranchKind::Fn(FnBranch::Random),
-          },
-          Branch {
-            weight: 1,
-            kind: BranchKind::Var('x'),
-          },
-          Branch {
-            weight: 1,
-            kind: BranchKind::Var('y'),
-          },
-          Branch {
-            weight: 1,
-            kind: BranchKind::Var('t'),
-          },
-        ],
-      },
-    ]
-  };
-  let node = grammar.generate(rng, 'E', d)?;
-
-  match node {
-    Node::Color(color) => {
-      Ok(Ast::new(color))
-    }
-    _ => {
-      Err(GenError::Unknown)
-    }
-  }
-}

@@ -5,7 +5,7 @@ use macroquad::miniquad::{ShaderSource, UniformDesc, UniformType};
 use rand::Rng;
 
 use crate::ast::{Ast, FnNode, Node, VarNode};
-use crate::generate::generate_ast_grammar;
+use crate::grammar::Grammar;
 
 const DEFAULT_VERTEX_SHADER: &str = /*language=glsl*/ "#version 100
   precision mediump float;
@@ -39,8 +39,8 @@ const FRAGMENT_SHADER_END: &str = "
 }
 ";
 
-pub fn load_shader_material(rng: &mut impl Rng, depth: isize) -> (Ast, Material) {
-  let ast = generate_ast_grammar(rng, depth).expect("ast generation");
+pub fn load_shader_material(grammar: &Grammar, rng: &mut impl Rng, depth: isize) -> (Ast, Material) {
+  let ast = grammar.generate_ast(rng, depth).expect("ast generation");
 
   let vertex_shader = DEFAULT_VERTEX_SHADER.to_string();
   let fragment_shader = compile_fragment_shader(&ast);
