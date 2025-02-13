@@ -8,16 +8,17 @@ use std::time::SystemTime;
 
 use clap::{Parser, Subcommand};
 use image::RgbaImage;
-use macroquad::prelude::DrawTextureParams;
-use rand::{Rng, SeedableRng};
+use rand::{Rng, rng, SeedableRng};
 use rand::rngs::StdRng;
 use rayon::iter::ParallelIterator;
 
 use crate::ast::{Env, Eval, NodeValue};
 use crate::generate::generate_ast;
+use crate::shader::load_shader_material;
 
 pub mod ast;
-mod generate;
+pub mod generate;
+pub mod shader;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -159,50 +160,48 @@ fn command_gui() -> Result<(), Box<dyn std::error::Error>> {
 async fn command_gui_main() {
   use macroquad::prelude::*;
 
-  const DEFAULT_VERTEX_SHADER: &'static str = /*language=glsl*/ "#version 100
-    precision mediump float;
-    attribute vec3 position;
-    attribute vec2 texcoord;
+  let mut depth = 7;
 
-    varying lowp vec2 uv;
+  let seed: u64 = {
+    let mut rng = rng();
+    rng.random()
+  };
 
-    uniform mat4 Model;
-    uniform mat4 Projection;
+  tracing::info!("using seed {seed}");
 
-    void main() {
-        gl_Position = Projection * Model * vec4(position, 1);
-        uv = texcoord;
-    }
-  ";
+  let mut rng = seeded_rng(seed);
 
-  const DEFAULT_FRAGMENT_SHADER: &'static str = /*language=glsl*/ "#version 100
-    precision mediump float;
-    varying vec2 uv;
-    void main() {
-        gl_FragColor = vec4(uv, 0, 1);
-    }
-  ";
+  let (mut ast, mut material) = load_shader_material(&mut rng, depth);
 
-  let vertex_shader = DEFAULT_VERTEX_SHADER.to_string();
-  let fragment_shader = DEFAULT_FRAGMENT_SHADER.to_string();
-
-  let material = load_material(
-    ShaderSource::Glsl {
-      vertex: &vertex_shader,
-      fragment: &fragment_shader,
-    },
-    MaterialParams::default(),
-  )
-    .expect("load material");
+  let mut paused = false;
 
   loop {
+    if is_key_pressed(KeyCode::R) {
+      let (a, m) = load_shader_material(&mut rng, depth);
+      ast = a;
+      material = m;
+    } else if is_key_pressed(KeyCode::Space) {
+      paused = !paused;
+    } else if is_key_pressed(KeyCode::RightBracket) && depth < 20 {
+      depth += 1;
+    } else if is_key_pressed(KeyCode::Slash) && depth > 1 {
+      depth -= 1;
+    } else if is_key_pressed(KeyCode::A) {
+      println!("AST ({}):\n{ast}", ast.len());
+    }
+
     clear_background(BLACK);
+
+    if !paused {
+      material.set_uniform("elapsed", get_time() as f32);
+    }
 
     gl_use_material(&material);
     draw_rectangle(0., 0., screen_width(), screen_height(), BLANK);
     gl_use_default_material();
 
-    draw_text(format!("FPS: {:0>3}", get_fps()).as_str(), 4., 20., 24., WHITE);
+    draw_text(format!("FPS   : {:0>3}", get_fps()).as_str(), 4., 20., 24., WHITE);
+    draw_text(format!("DEPTH : {:0>3}", depth).as_str(), 4., 40., 24., WHITE);
 
     next_frame().await
   }

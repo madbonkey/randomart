@@ -31,12 +31,14 @@ fn generate_node_e(rng: &mut impl Rng, d: isize) -> Result<Node, GenError> {
 fn generate_node_a(rng: &mut impl Rng, _d: isize) -> Result<Node, GenError> {
   let r: f32 = rng.random();
 
-  let node = if r > 0.66 {
+  let node = if r > 0.75 {
     Node::val(rng.random::<f32>() * 2. - 1.)
-  } else if r > 0.33 {
+  } else if r > 0.5 {
     Node::var(VarNode::X)
-  } else {
+  } else if r > 0.25 {
     Node::var(VarNode::Y)
+  } else {
+    Node::var(VarNode::T)
   };
 
   Ok(node)
@@ -50,25 +52,27 @@ fn generate_node_c(rng: &mut impl Rng, d: isize) -> Result<Node, GenError> {
   } else {
     let r: f32 = rng.random();
 
-    if r > 0.8 {
+    if r > 0.9 {
       Node::unary_fn(UnaryFnNode::sqrt(generate_node_c(rng, d - 1)?))
-    } else if r > 0.6 {
+    } else if r > 0.8 {
       Node::unary_fn(UnaryFnNode::sin(generate_node_c(rng, d - 1)?))
-    } else if r > 0.4 {
+    } else if r > 0.6 {
       Node::binary_fn(BinaryFnNode::add(
         generate_node_c(rng, d - 1)?,
         generate_node_c(rng, d - 1)?,
       ))
-    } else if r > 0.2 {
+    } else if r > 0.4 {
+      Node::binary_fn(BinaryFnNode::mul(
+        generate_node_c(rng, d - 1)?,
+        generate_node_c(rng, d - 1)?,
+      ))
+    } else if r > 0.3 {
       Node::binary_fn(BinaryFnNode::modulo(
         generate_node_c(rng, d - 1)?,
         generate_node_c(rng, d - 1)?,
       ))
     } else {
-      Node::binary_fn(BinaryFnNode::mul(
-        generate_node_c(rng, d - 1)?,
-        generate_node_c(rng, d - 1)?,
-      ))
+      generate_node_a(rng, d - 1)?
     }
 
     // if r > 0.75 {

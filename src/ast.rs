@@ -14,12 +14,12 @@ pub trait Eval {
 pub struct Env {
   pub x: f32,
   pub y: f32,
-  // vars: BTreeMap<String, f32>,
+  pub t: f32,
 }
 
 impl Env {
   pub fn new(x: f32, y: f32) -> Self {
-    Self { x, y }
+    Self { x, y, t: 0. }
   }
   // pub fn set_var(&mut self, name: impl Into<String>, value: f32) {
   //   self.vars.insert(name.into(), value);
@@ -57,6 +57,10 @@ pub struct Ast {
 impl Ast {
   pub fn new(root: Node) -> Self {
     Self { root }
+  }
+
+  pub fn root(&self) -> &Node {
+    &self.root
   }
 
   pub fn len(&self) -> usize {
@@ -169,18 +173,32 @@ pub enum NodeValue {
   Triple(f32, f32, f32),
 }
 
+impl NodeValue {
+  pub fn scalar_value(&self) -> Option<f32> {
+    if let Self::Scalar(val) = self {
+      Some(*val)
+    } else {
+      None
+    }
+  }
+
+  pub fn triple_value(&self) -> Option<(f32, f32, f32)> {
+    if let Self::Triple(a, b, c) = self {
+      Some((*a, *b, *c))
+    } else {
+      None
+    }
+  }
+}
+
 pub type BoxNode = Box<Node>;
 
 #[derive(Debug)]
 pub enum VarNode {
   X,
   Y,
+  T,
 }
-//
-// #[derive(Debug)]
-// pub struct VarNode {
-//   name: &'n str,
-// }
 
 impl VarNode {
   pub fn len(&self) -> usize { 1 }
@@ -193,12 +211,8 @@ impl Eval for VarNode {
     match self {
       Self::X => Ok(env.x),
       Self::Y => Ok(env.y),
+      Self::T => Ok(env.t),
     }
-    // if let Some(val) = env.vars.get(self.name) {
-    //   Ok(*val)
-    // } else {
-    //   Err(EvalError::message(format!("var {:?} not present in env", self.name)))
-    // }
   }
 }
 
@@ -207,8 +221,8 @@ impl Display for VarNode {
     match self {
       VarNode::X => f.write_char('x'),
       VarNode::Y => f.write_char('y'),
+      VarNode::T => f.write_char('t'),
     }
-    // f.write_str(self.name)
   }
 }
 
@@ -218,6 +232,10 @@ pub struct ValNode {
 }
 
 impl ValNode {
+  pub fn value(&self) -> f32 {
+    self.value
+  }
+
   pub fn len(&self) -> usize { 1 }
 }
 
@@ -251,6 +269,10 @@ impl ColorNode {
     }
   }
 
+  pub fn value(&self) -> (&BoxNode, &BoxNode, &BoxNode) {
+    (&self.r, &self.g, &self.b)
+  }
+
   pub fn len(&self) -> usize {
     self.r.len() + self.g.len() + self.b.len()
   }
@@ -278,11 +300,11 @@ impl Eval for ColorNode {
 
 impl Display for ColorNode {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    f.write_str("r := ")?;
+    f.write_str("  r := ")?;
     Display::fmt(&self.r, f)?;
-    f.write_str("\ng := ")?;
+    f.write_str("\n  g := ")?;
     Display::fmt(&self.g, f)?;
-    f.write_str("\nb := ")?;
+    f.write_str("\n  b := ")?;
     Display::fmt(&self.b, f)?;
     f.write_str("\n")
   }
