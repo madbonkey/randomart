@@ -5,7 +5,7 @@ use macroquad::miniquad::{ShaderSource, UniformDesc, UniformType};
 use rand::Rng;
 
 use crate::ast::{Ast, FnNode, Node, VarNode};
-use crate::generate::generate_ast_hardcoded;
+use crate::generate::generate_ast_grammar;
 
 const DEFAULT_VERTEX_SHADER: &str = /*language=glsl*/ "#version 100
   precision mediump float;
@@ -40,7 +40,9 @@ const FRAGMENT_SHADER_END: &str = "
 ";
 
 pub fn load_shader_material(rng: &mut impl Rng, depth: isize) -> (Ast, Material) {
-  let ast = generate_ast_hardcoded(rng, depth).expect("ast generation");
+  let ast = generate_ast_grammar(rng, depth).expect("ast generation");
+
+  info!("generated AST:\n{ast}");
 
   let vertex_shader = DEFAULT_VERTEX_SHADER.to_string();
   let fragment_shader = compile_fragment_shader(&ast);
@@ -101,11 +103,17 @@ fn compile_fragment_shader_node(node: &Node, out: &mut String) {
       let (r, g, b) = inner.nodes();
 
       out.push_str("vec3(");
+      out.push_str("abs(");
       compile_fragment_shader_node(r, out);
+      out.push(')');
       out.push(',');
+      out.push_str("abs(");
       compile_fragment_shader_node(g, out);
+      out.push(')');
       out.push(',');
+      out.push_str("abs(");
       compile_fragment_shader_node(b, out);
+      out.push(')');
       out.push(')');
     }
     Node::Fn(inner) => {

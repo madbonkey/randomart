@@ -147,7 +147,9 @@ fn command_gui() -> Result<(), Box<dyn std::error::Error>> {
 async fn command_gui_main() {
   use macroquad::prelude::*;
 
-  let mut depth = 7;
+  const MAX_DEPTH: isize = 150;
+
+  let mut depth = 75;
 
   let seed: u64 = {
     let mut rng = rng();
@@ -161,6 +163,7 @@ async fn command_gui_main() {
   let (mut ast, mut material) = load_shader_material(&mut rng, depth);
 
   let mut paused = false;
+  let mut t = 0f32;
 
   loop {
     if is_key_pressed(KeyCode::R) {
@@ -169,26 +172,31 @@ async fn command_gui_main() {
       material = m;
     } else if is_key_pressed(KeyCode::Space) {
       paused = !paused;
-    } else if is_key_pressed(KeyCode::RightBracket) && depth < 20 {
-      depth += 1;
+    } else if is_key_pressed(KeyCode::RightBracket) && depth < MAX_DEPTH {
+      let next_depth = depth + if is_key_down(KeyCode::LeftShift) { 10 } else { 1 };
+      depth = next_depth.clamp(1, MAX_DEPTH);
     } else if is_key_pressed(KeyCode::Slash) && depth > 1 {
-      depth -= 1;
+      let next_depth = depth - if is_key_down(KeyCode::LeftShift) { 10 } else { 1 };
+      depth = next_depth.clamp(1, MAX_DEPTH);
     } else if is_key_pressed(KeyCode::A) {
       println!("AST:\n{ast}");
     }
 
     clear_background(BLACK);
 
+
     if !paused {
-      material.set_uniform("elapsed", get_time() as f32);
+      t = get_time() as f32;
+      material.set_uniform("elapsed", t);
     }
 
     gl_use_material(&material);
     draw_rectangle(0., 0., screen_width(), screen_height(), BLANK);
     gl_use_default_material();
 
-    draw_text(format!("FPS   : {:0>3}", get_fps()).as_str(), 4., 20., 24., WHITE);
-    draw_text(format!("DEPTH : {:0>3}", depth).as_str(), 4., 40., 24., WHITE);
+    draw_text(format!("FPS : {:0>4}", get_fps()).as_str(), 4., 20., 24., WHITE);
+    draw_text(format!("D   : {:0>4}", depth).as_str(), 4., 40., 24., WHITE);
+    draw_text(format!("T   : {:.2}", (t.sin() + 1.0) / 2.0).as_str(), 4., 60., 24., WHITE);
 
     next_frame().await
   }
