@@ -4,9 +4,9 @@ use macroquad::miniquad::{ShaderSource, UniformDesc, UniformType};
 use rand::Rng;
 
 use crate::ast::{Ast, BinaryFnNode, BoxNode, Node, UnaryFnNode, VarNode};
-use crate::generate::generate_ast;
+use crate::generate::generate_ast_hardcoded;
 
-const DEFAULT_VERTEX_SHADER: &'static str = /*language=glsl*/ "#version 100
+const DEFAULT_VERTEX_SHADER: &str = /*language=glsl*/ "#version 100
   precision mediump float;
   attribute vec3 position;
   attribute vec2 texcoord;
@@ -22,7 +22,7 @@ const DEFAULT_VERTEX_SHADER: &'static str = /*language=glsl*/ "#version 100
   }
 ";
 
-const FRAGMENT_SHADER_START: &'static str = "#version 100
+const FRAGMENT_SHADER_START: &str = "#version 100
 precision mediump float;
 uniform float elapsed;
 varying vec2 uv;
@@ -33,13 +33,13 @@ void main() {
 
     vec3 ast_color = ";
 
-const FRAGMENT_SHADER_END: &'static str = "
+const FRAGMENT_SHADER_END: &str = "
     gl_FragColor = vec4(ast_color, 1);
 }
 ";
 
 pub fn load_shader_material(rng: &mut impl Rng, depth: isize) -> (Ast, Material) {
-  let ast = generate_ast(rng, depth).expect("ast generation");
+  let ast = generate_ast_hardcoded(rng, depth).expect("ast generation");
 
   let vertex_shader = DEFAULT_VERTEX_SHADER.to_string();
   let fragment_shader = compile_fragment_shader(&ast);
@@ -90,9 +90,9 @@ fn compile_fragment_shader_node(node: &Node, out: &mut String) {
 
       out.push_str("vec3(");
       compile_fragment_shader_node(r, out);
-      out.push_str(",");
+      out.push(',');
       compile_fragment_shader_node(g, out);
-      out.push_str(",");
+      out.push(',');
       compile_fragment_shader_node(b, out);
       out.push(')');
     }

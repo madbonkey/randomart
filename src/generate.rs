@@ -10,7 +10,7 @@ pub enum GenError {
   Message(String),
 }
 
-pub fn generate_ast(rng: &mut impl Rng, d: isize) -> Result<Ast, GenError> {
+pub fn generate_ast_hardcoded(rng: &mut impl Rng, d: isize) -> Result<Ast, GenError> {
   let root = generate_node_e(rng, d)?;
   let ast = Ast::new(root);
   Ok(ast)
@@ -97,3 +97,21 @@ fn generate_node_c(rng: &mut impl Rng, d: isize) -> Result<Node, GenError> {
 
   Ok(node)
 }
+
+// ---
+
+// pub struct Grammar {
+//   rules: Vec<Rule>,
+// }
+//
+// pub struct Rule {
+//   name: String,
+//   branches: Vec<Branch>,
+// }
+//
+// pub struct Branch {}
+//
+// pub enum BranchKind {
+//   Rule(String),
+//   Terminal
+// }

@@ -1,19 +1,18 @@
-#![allow(unused_imports)]
-#![allow(dead_code)]
+// #![allow(unused_imports)]
+// #![allow(dead_code)]
 
-#[macro_use(info, debug, error, warn)]
+#[macro_use(info, error)]
 extern crate tracing;
 
 use std::time::SystemTime;
 
 use clap::{Parser, Subcommand};
-use image::RgbaImage;
 use rand::{Rng, rng, SeedableRng};
 use rand::rngs::StdRng;
 use rayon::iter::ParallelIterator;
 
 use crate::ast::{Env, Eval, NodeValue};
-use crate::generate::generate_ast;
+use crate::generate::generate_ast_hardcoded;
 use crate::shader::load_shader_material;
 
 pub mod ast;
@@ -68,17 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   Ok(())
 }
 
-fn seeded_rng(seed: u64) -> impl Rng {
-  let seed: [u8; 8] = seed.to_be_bytes();
-
-  StdRng::from_seed([
-    0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0,
-    seed[0], seed[1], seed[2], seed[3],
-    seed[4], seed[5], seed[6], seed[7],
-  ])
-}
+// ---
 
 fn command_generate(depth: u8, size: u16, num_images: u16, seed: u64) -> Result<(), Box<dyn std::error::Error>> {
   info!("Image count: {}", num_images);
@@ -87,14 +76,13 @@ fn command_generate(depth: u8, size: u16, num_images: u16, seed: u64) -> Result<
   info!("Generation seed: {}", seed);
 
   let mut rng = seeded_rng(seed);
-  let depth = depth;
   let size = size as u32;
   let scale = 1f32 / size as f32;
 
   for _ in 0..num_images {
-    use image::{Pixel, RgbaImage};
+    use image::RgbaImage;
 
-    let ast = generate_ast(&mut rng, depth as isize)?;
+    let ast = generate_ast_hardcoded(&mut rng, depth as isize)?;
     let ast_hash = ast.sha256();
 
     info!("ast length: {}", ast.len());
@@ -205,5 +193,19 @@ async fn command_gui_main() {
 
     next_frame().await
   }
+}
+
+// ---
+
+fn seeded_rng(seed: u64) -> impl Rng {
+  let seed: [u8; 8] = seed.to_be_bytes();
+
+  StdRng::from_seed([
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    seed[0], seed[1], seed[2], seed[3],
+    seed[4], seed[5], seed[6], seed[7],
+  ])
 }
 
