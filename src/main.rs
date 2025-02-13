@@ -12,7 +12,7 @@ use rand::rngs::StdRng;
 use rayon::iter::ParallelIterator;
 
 use crate::ast::{Env, Eval};
-use crate::generate::generate_ast_hardcoded;
+use crate::generate::generate_ast_grammar;
 use crate::shader::load_shader_material;
 
 pub mod ast;
@@ -82,7 +82,8 @@ fn command_generate(depth: u8, size: u16, num_images: u16, seed: u64) -> Result<
   for _ in 0..num_images {
     use image::RgbaImage;
 
-    let ast = generate_ast_hardcoded(&mut rng, depth as isize)?;
+    // let ast = generate_ast_hardcoded(&mut rng, depth as isize)?;
+    let ast = generate_ast_grammar(&mut rng, depth as isize)?;
     let ast_hash = ast.sha256();
 
     info!("ast hash: {ast_hash:?}");
