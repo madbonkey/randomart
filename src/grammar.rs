@@ -45,27 +45,27 @@ impl Grammar {
               kind: BranchKind::Rule('A'),
             },
             Branch {
-              weight: 3,
+              weight: 4,
               kind: BranchKind::Fn(FnBranch::Add(
                 Box::new(BranchKind::Rule('C')),
                 Box::new(BranchKind::Rule('C')),
               )),
             },
             Branch {
-              weight: 3,
+              weight: 4,
               kind: BranchKind::Fn(FnBranch::Mul(
                 Box::new(BranchKind::Rule('C')),
                 Box::new(BranchKind::Rule('C')),
               )),
             },
             Branch {
-              weight: 2,
+              weight: 3,
               kind: BranchKind::Fn(FnBranch::Sqrt(
                 Box::new(BranchKind::Rule('C')),
               )),
             },
             Branch {
-              weight: 2,
+              weight: 3,
               kind: BranchKind::Fn(FnBranch::Sin(
                 Box::new(BranchKind::Rule('C')),
               )),
@@ -83,15 +83,15 @@ impl Grammar {
           id: 'A',
           branches: vec![
             Branch {
-              weight: 1,
+              weight: 2,
               kind: BranchKind::Fn(FnBranch::Random),
             },
             Branch {
-              weight: 2,
+              weight: 3,
               kind: BranchKind::Var('x'),
             },
             Branch {
-              weight: 2,
+              weight: 3,
               kind: BranchKind::Var('y'),
             },
             Branch {
