@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter, Write};
 use rand::Rng;
 use rand::seq::IteratorRandom;
 
@@ -162,6 +163,16 @@ impl Grammar {
   }
 }
 
+impl Display for Grammar {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    for rule in &self.rules {
+      Display::fmt(rule, f)?;
+      f.write_char('\n')?;
+    }
+    Ok(())
+  }
+}
+
 pub type RuleId = char;
 pub type VarId = char;
 
@@ -215,10 +226,33 @@ impl Rule {
   }
 }
 
+impl Display for Rule {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    f.write_char(self.id)?;
+    f.write_str(" := \n")?;
+    for branch in &self.branches {
+      f.write_str("  | ")?;
+      Display::fmt(branch, f)?;
+      f.write_char('\n')?;
+    }
+    Ok(())
+  }
+}
+
 #[derive(Debug)]
 pub struct Branch {
   kind: BranchKind,
   weight: u8,
+}
+
+impl Display for Branch {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    if self.weight > 1 {
+      f.write_fmt(format_args!("{}:", self.weight))?;
+    }
+    Display::fmt(&self.kind, f)?;
+    Ok(())
+  }
 }
 
 impl Branch {
@@ -233,6 +267,29 @@ pub enum BranchKind {
   Var(VarId),
   Fn(FnBranch),
   Color(ColorBranch),
+}
+
+impl Display for BranchKind {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::Rule(rule) => {
+        f.write_char('<')?;
+        f.write_char(*rule)?;
+        f.write_char('>')?;
+      },
+      Self::Var(var) => {
+        f.write_char('@')?;
+        f.write_char(*var)?;
+      },
+      Self::Fn(fb) => {
+        Display::fmt(fb, f)?;
+      },
+      Self::Color(cb) => {
+        Display::fmt(cb, f)?;
+      },
+    }
+    Ok(())
+  }
 }
 
 impl BranchKind {
@@ -313,6 +370,19 @@ pub struct ColorBranch {
   b: Box<BranchKind>,
 }
 
+impl Display for ColorBranch {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    f.write_str("color(")?;
+    Display::fmt(&self.r, f)?;
+    f.write_str(", ")?;
+    Display::fmt(&self.g, f)?;
+    f.write_str(", ")?;
+    Display::fmt(&self.b, f)?;
+    f.write_char(')')?;
+    Ok(())
+  }
+}
+
 #[derive(Debug)]
 pub enum FnBranch {
   Random,
@@ -325,3 +395,56 @@ pub enum FnBranch {
   Mix(Box<BranchKind>, Box<BranchKind>, Box<BranchKind>),
 }
 
+impl Display for FnBranch {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::Random => f.write_str("rand()")?,
+      Self::Sqrt(inner) => {
+        f.write_str("sqrt(")?;
+        Display::fmt(inner, f)?;
+        f.write_char(')')?;
+      },
+      Self::Sin(inner) => {
+        f.write_str("sin(")?;
+        Display::fmt(inner, f)?;
+        f.write_char(')')?;
+      },
+      Self::Cos(inner) => {
+        f.write_str("cos(")?;
+        Display::fmt(inner, f)?;
+        f.write_char(')')?;
+      },
+      Self::Add(l, r) => {
+        f.write_str("add(")?;
+        Display::fmt(l, f)?;
+        f.write_str(", ")?;
+        Display::fmt(r, f)?;
+        f.write_char(')')?;
+      },
+      Self::Mul(l, r) => {
+        f.write_str("mul(")?;
+        Display::fmt(l, f)?;
+        f.write_str(", ")?;
+        Display::fmt(r, f)?;
+        f.write_char(')')?;
+      },
+      Self::Mod(l, r) => {
+        f.write_str("mod(")?;
+        Display::fmt(l, f)?;
+        f.write_str(", ")?;
+        Display::fmt(r, f)?;
+        f.write_char(')')?;
+      },
+      Self::Mix(x, y, a) => {
+        f.write_str("mix(")?;
+        Display::fmt(x, f)?;
+        f.write_str(", ")?;
+        Display::fmt(y, f)?;
+        f.write_str(", ")?;
+        Display::fmt(a, f)?;
+        f.write_char(')')?;
+      },
+    }
+    Ok(())
+  }
+}

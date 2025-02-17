@@ -173,6 +173,8 @@ async fn command_gui_main(depth: u8, seed: u64) {
 
   let grammar = Grammar::new_sample();
 
+  tracing::info!("Generator grammar:\n{grammar}");
+
   let mut shader_material = ShaderMaterial::new(&grammar, &mut rng, depth);
 
   let mut show_hud = true;
