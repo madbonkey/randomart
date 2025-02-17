@@ -28,18 +28,12 @@ const FRAGMENT_SHADER_TEMPLATE: &str = /*language=glsl*/ "#version 100
   uniform float elapsed;
   varying vec2 uv;
 
-  vec3 compute(float x, float y, float t) {
-    vec3 ret = vec3(0, 0, 0);
-    // ___INSERT_MARKER___
-    return ret;
-  }
-
   void main() {
     float x = uv.x;
     float y = uv.y;
     float t = (sin(elapsed) + 1.0) / 2.0;
-
-    gl_FragColor = vec4(compute(x, y, t), 1);
+    // ___INSERT_MARKER___
+    gl_FragColor.a = 1.0;
   }
 ";
 
@@ -109,7 +103,7 @@ impl ShaderMaterial {
   }
 }
 
-pub fn load_shader_material(grammar: &Grammar, rng: &mut impl Rng, depth: isize) -> (Ast, Material) {
+fn load_shader_material(grammar: &Grammar, rng: &mut impl Rng, depth: isize) -> (Ast, Material) {
   let mut ast = grammar.generate_ast(rng, depth).expect("ast generation");
   ast.optimize();
 
@@ -153,9 +147,9 @@ fn compile_fragment_shader(ast: &Ast) -> String {
   let g = compile_fragment_shader_node_temp(g);
   let b = compile_fragment_shader_node_temp(b);
 
-  write!(&mut s, "ret.x = {r};\n").expect("write red channel expression");
-  write!(&mut s, "ret.y = {g};\n").expect("write green channel expression");
-  write!(&mut s, "ret.z = {b};\n").expect("write blue channel expression");
+  write!(&mut s, "gl_FragColor.r = {r};\n").expect("write red channel expression");
+  write!(&mut s, "gl_FragColor.g = {g};\n").expect("write green channel expression");
+  write!(&mut s, "gl_FragColor.b = {b};").expect("write blue channel expression");
 
   s.push_str(fs_end);
 
