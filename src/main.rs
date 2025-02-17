@@ -144,7 +144,7 @@ fn command_generate(depth: u8, size: u16, num_images: u16, seed: u64) -> Result<
 
 fn command_gui(depth: u8, seed: u64) -> Result<(), Box<dyn std::error::Error>> {
   let conf = macroquad::window::Conf {
-    window_title: "Test".to_owned(),
+    window_title: "Random Art".to_owned(),
     window_width: 720,
     window_height: 720,
     high_dpi: true,
