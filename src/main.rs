@@ -168,6 +168,7 @@ async fn command_gui_main(depth: u8, seed: u64) {
   tracing::info!("Generation seed: {}", seed);
   tracing::info!("Initial depth: {}", depth);
 
+  let mut seed = seed;
   let mut rng = seeded_rng(seed);
 
   let grammar = Grammar::new_sample();
@@ -184,8 +185,8 @@ async fn command_gui_main(depth: u8, seed: u64) {
   let mut t = 0f32;
   let mut fps = 60;
 
-  let seed_text = format!("SEED  : {:0>4}", seed);
-  let seed_text_bounds = measure_text(seed_text.as_str(), None, 24, 1.0);
+  let mut seed_text = format!("SEED  : {:0>4}", seed);
+  let mut seed_text_bounds = measure_text(seed_text.as_str(), None, 24, 1.0);
 
   loop {
     // time processing
@@ -238,6 +239,14 @@ async fn command_gui_main(depth: u8, seed: u64) {
         KeyCode::D => {
           shader_material.debug_dump();
         },
+        KeyCode::S => {
+          seed = rng.random_range(1000..99999);
+          seed_text = format!("SEED  : {:0>4}", seed);
+          seed_text_bounds = measure_text(seed_text.as_str(), None, 24, 1.0);
+          rng = seeded_rng(seed);
+          shader_material.reset(&grammar, &mut rng, depth);
+          t = 0f32;
+        },
         _ => {}
       }
     }
@@ -280,8 +289,8 @@ async fn command_gui_main(depth: u8, seed: u64) {
         draw_rectangle(4., 4., seed_text_bounds.width + 12., 116., Color::from_rgba(0, 0, 0, 190));
 
         draw_text(seed_text.as_str(), 10., 26., 24., WHITE);
-        let (hc, hm, ht) = shader_material.history_info();
-        draw_text(format!("HIST  : {hc}/{hm} ({ht})").as_str(), 10., 46., 24., WHITE);
+        let (_, _, ht) = shader_material.history_info();
+        draw_text(format!("HIST  : {ht}").as_str(), 10., 46., 24., WHITE);
         draw_text(format!("TIME  : {:.2}", (t.sin() + 1.0) / 2.0).as_str(), 10., 66., 24., WHITE);
         draw_text(format!("DEPTH : {:0>4}", depth).as_str(), 10., 86., 24., WHITE);
         draw_text(format!("FPS   : {:0>4}", fps).as_str(), 10., 106., 24., WHITE);

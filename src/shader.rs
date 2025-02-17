@@ -80,6 +80,13 @@ impl ShaderMaterial {
     self.total += 1;
   }
 
+  pub fn reset(&mut self, grammar: &Grammar, rng: &mut impl Rng, depth: isize) {
+    self.current = 0;
+    self.total = 0;
+    self.history.clear();
+    self.next(grammar, rng, depth);
+  }
+
   pub fn history_forward(&mut self) {
     if self.current == self.history.len() - 1 { return; }
     self.current = self.current + 1;
