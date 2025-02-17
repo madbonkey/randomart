@@ -67,6 +67,10 @@ impl ShaderMaterial {
     &self.history[self.current].1
   }
 
+  pub fn set_elapsed_time(&self, t: f32) {
+    self.current_material().set_uniform("elapsed", t);
+  }
+
   pub fn next(&mut self, grammar: &Grammar, rng: &mut impl Rng, depth: isize) {
     if self.history.len() == Self::MAX_HISTORY {
       let prev = std::mem::replace(&mut self.history, Vec::with_capacity(Self::MAX_HISTORY));

@@ -4,6 +4,8 @@
 #[macro_use(info, error)]
 extern crate tracing;
 
+use std::io::Write;
+use std::process::Stdio;
 use std::time::SystemTime;
 
 use clap::{Parser, Subcommand};
@@ -159,6 +161,7 @@ async fn command_gui_main(depth: u8, seed: u64) {
   use macroquad::prelude::*;
 
   const MAX_DEPTH: isize = 150;
+  const TAU: f32 = 6.283185307179586;
 
   let mut depth = depth as isize;
 
@@ -173,6 +176,11 @@ async fn command_gui_main(depth: u8, seed: u64) {
 
   let mut show_hud = true;
   let mut paused = false;
+  let mut ffmpeg_recording: Option<Ffmpeg> = None;
+
+  let mut ffmpeg_frame_count = 0usize;
+  let ffmpeg_target_frame_count = (TAU * 60.).ceil() as usize;
+
   let mut t = 0f32;
   let mut fps = 60;
 
@@ -180,57 +188,138 @@ async fn command_gui_main(depth: u8, seed: u64) {
   let seed_text_bounds = measure_text(seed_text.as_str(), None, 24, 1.0);
 
   loop {
-    if is_key_pressed(KeyCode::N) {
-      shader_material.next(&grammar, &mut rng, depth);
-      t = 0f32;
-    } else if is_key_pressed(KeyCode::Left) {
-      shader_material.history_backward();
-      t = 0f32;
-    } else if is_key_pressed(KeyCode::Right) {
-      shader_material.history_forward();
-      t = 0f32;
-    } else if is_key_pressed(KeyCode::Space) {
-      paused = !paused;
-    } else if is_key_pressed(KeyCode::RightBracket) && depth < MAX_DEPTH {
-      let next_depth = depth + if is_key_down(KeyCode::LeftShift) { 10 } else { 1 };
-      depth = next_depth.clamp(1, MAX_DEPTH);
-    } else if is_key_pressed(KeyCode::Slash) && depth > 1 {
-      let next_depth = depth - if is_key_down(KeyCode::LeftShift) { 10 } else { 1 };
-      depth = next_depth.clamp(1, MAX_DEPTH);
-    } else if is_key_pressed(KeyCode::H) {
-      show_hud = !show_hud;
-    }
-
-    clear_background(BLACK);
-
+    // time processing
     if !paused {
-      t += get_frame_time();
-
-      shader_material
-        .current_material()
-        .set_uniform("elapsed", t);
+      t += if ffmpeg_recording.is_some() { 1.0 / 60. } else { get_frame_time() };
     }
+
+    // input handling
+    if let Some(key) = get_last_key_pressed() {
+      match key {
+        KeyCode::N => {
+          shader_material.next(&grammar, &mut rng, depth);
+          t = 0f32;
+        }
+        KeyCode::Left => {
+          shader_material.history_backward();
+          t = 0f32;
+        }
+        KeyCode::Right => {
+          shader_material.history_forward();
+          t = 0f32;
+        }
+        KeyCode::Space => {
+          paused = !paused;
+        }
+        KeyCode::RightBracket if depth < MAX_DEPTH => {
+          let next_depth = depth + if is_key_down(KeyCode::LeftShift) { 10 } else { 1 };
+          depth = next_depth.clamp(1, MAX_DEPTH);
+        }
+        KeyCode::Slash if depth > 1 => {
+          let next_depth = depth - if is_key_down(KeyCode::LeftShift) { 10 } else { 1 };
+          depth = next_depth.clamp(1, MAX_DEPTH);
+        }
+        KeyCode::H => {
+          show_hud = !show_hud;
+        }
+        KeyCode::R if ffmpeg_recording.is_none() => {
+          let (_, _, hn) = shader_material.history_info();
+
+          tracing::info!("starting recording for seed {seed}, depth {depth}, history index {hn}");
+
+          let Ok(ffmpeg) = Ffmpeg::start_recording(seed, depth, hn) else {
+            tracing::error!("failed to start ffmpeg recording");
+            break;
+          };
+
+          ffmpeg_recording.replace(ffmpeg);
+          t = 0f32;
+        }
+        _ => {}
+      }
+    }
+
+    // shader updating
+    shader_material.set_elapsed_time(t);
+
+    // main scene drawing
+    clear_background(BLACK);
 
     gl_use_material(shader_material.current_material());
     draw_rectangle(0., 0., screen_width(), screen_height(), BLANK);
     gl_use_default_material();
 
+    // recording
+    // {
+    //   // flush gl draws (is this needed?)
+    //   let mut gl = unsafe { get_internal_gl() };
+    //   gl.flush();
+    // }
+    if let Some(ffmpeg) = &mut ffmpeg_recording {
+      if ffmpeg_frame_count < ffmpeg_target_frame_count {
+        ffmpeg.write_image(get_screen_data());
+        ffmpeg_frame_count += 1;
+      }
+    }
+
+    if ffmpeg_recording.is_some() && ffmpeg_frame_count >= ffmpeg_target_frame_count {
+      tracing::info!("recording target frame count reached ({ffmpeg_frame_count} / {ffmpeg_target_frame_count})");
+      let ffmpeg = unsafe { ffmpeg_recording.take().unwrap_unchecked() };
+      ffmpeg.finish_recording();
+      ffmpeg_frame_count = 0;
+    }
+
+    // HUD drawing
     if show_hud {
-      fps = get_smooth_fps(&mut fps, get_fps());
+      if ffmpeg_recording.is_none() {
+        fps = get_smooth_fps(&mut fps, get_fps());
 
-      draw_rectangle(4., 4., seed_text_bounds.width + 12., 116., Color::from_rgba(0, 0, 0, 190));
+        draw_rectangle(4., 4., seed_text_bounds.width + 12., 116., Color::from_rgba(0, 0, 0, 190));
 
-      draw_text(seed_text.as_str(), 10., 26., 24., WHITE);
-      let (hc, hm, ht) = shader_material.history_info();
-      draw_text(format!("HIST  : {hc}/{hm} ({ht})").as_str(), 10., 46., 24., WHITE);
-      draw_text(format!("TIME  : {:.2}", (t.sin() + 1.0) / 2.0).as_str(), 10., 66., 24., WHITE);
-      draw_text(format!("DEPTH : {:0>4}", depth).as_str(), 10., 86., 24., WHITE);
-      draw_text(format!("FPS   : {:0>4}", fps).as_str(), 10., 106., 24., WHITE);
+        draw_text(seed_text.as_str(), 10., 26., 24., WHITE);
+        let (hc, hm, ht) = shader_material.history_info();
+        draw_text(format!("HIST  : {hc}/{hm} ({ht})").as_str(), 10., 46., 24., WHITE);
+        draw_text(format!("TIME  : {:.2}", (t.sin() + 1.0) / 2.0).as_str(), 10., 66., 24., WHITE);
+        draw_text(format!("DEPTH : {:0>4}", depth).as_str(), 10., 86., 24., WHITE);
+        draw_text(format!("FPS   : {:0>4}", fps).as_str(), 10., 106., 24., WHITE);
+      } else {
+        let color = RED;
+
+        let text = "RECORDING ...";
+        let text_bounds = measure_text(text, None, 40, 1.0);
+
+        draw_text(
+          text,
+          screen_width() / 2.0 - (text_bounds.width / 2.0),
+          screen_height() / 2.0 - (text_bounds.height / 2.0),
+          40.,
+          color
+        );
+
+        let recording_progress = (1f32 / ffmpeg_target_frame_count as f32) * ffmpeg_frame_count as f32;
+        draw_rectangle_lines(
+          screen_width() / 2.0 - (text_bounds.width / 2.0),
+          screen_height() / 2.0 + (text_bounds.height / 2.0) + 8.,
+          text_bounds.width,
+          24.0,
+          4.0,
+          color,
+        );
+        draw_rectangle(
+          screen_width() / 2.0 - (text_bounds.width / 2.0),
+          screen_height() / 2.0 + (text_bounds.height / 2.0) + 8.,
+          text_bounds.width * recording_progress,
+          24.0,
+          color,
+        );
+      }
     }
 
     next_frame().await
   }
 }
+
+// ---
 
 fn get_smooth_fps(fps: &mut i32, current_fps: i32) -> i32 {
   const ALPHA: f32 = 0.025;
@@ -242,8 +331,6 @@ fn get_smooth_fps(fps: &mut i32, current_fps: i32) -> i32 {
 
   smooth
 }
-
-// ---
 
 fn seeded_rng(seed: u64) -> impl Rng {
   let seed: [u8; 8] = seed.to_be_bytes();
@@ -257,3 +344,64 @@ fn seeded_rng(seed: u64) -> impl Rng {
   ])
 }
 
+struct Ffmpeg {
+  proc: std::process::Child,
+}
+
+impl Ffmpeg {
+  fn start_recording(seed: u64, depth: isize, hn: usize) -> Result<Self, std::io::Error> {
+    let output_path = format!("output/rec_{seed}_{depth}_{hn}.mp4");
+
+    let cmd = std::process::Command::new("ffmpeg")
+      // see https://github.com/tsoding/randomart/blob/main/src/ffmpeg_linux.c#L47
+      .args(&[
+        // global options
+        "-loglevel", "verbose",
+        "-y",
+
+        // input #1: piped raw video frames
+        "-f", "rawvideo",
+        "-pix_fmt", "rgba",
+        "-s", "1440x1440",
+        "-r", "60",
+        "-i", "-",
+
+        // output
+        "-vf", "vflip",
+        "-c:v", "libx264",
+        "-vb", "4500k",
+        "-pix_fmt", "yuv420p",
+      ])
+      .arg(output_path)
+      .stdin(Stdio::piped())
+      .stderr(Stdio::inherit())
+      .stdout(Stdio::inherit())
+      .spawn();
+
+    let proc = cmd?;
+
+    if !proc.stdin.is_some() {
+      return Err(std::io::Error::from(std::io::ErrorKind::BrokenPipe));
+    }
+
+    Ok(Self { proc })
+  }
+
+  fn write_image(&mut self, image: macroquad::texture::Image) {
+    let pipe = unsafe { self.proc.stdin.as_mut().unwrap_unchecked() };
+    if let Err(e) = pipe.write_all(image.bytes.as_slice()) {
+      tracing::error!("error writing frame: {e}");
+    }
+  }
+
+  fn finish_recording(self) {
+    match self.proc.wait_with_output() {
+      Ok(output) => {
+        tracing::info!("recording finished with exit status {:?}", output.status);
+      }
+      Err(e) => {
+        tracing::error!("error finishing recording: {e}");
+      }
+    }
+  }
+}
