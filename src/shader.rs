@@ -99,6 +99,14 @@ impl ShaderMaterial {
   pub fn history_info(&self) -> (usize, usize, usize) {
     (self.current + 1, self.history.len(), self.total)
   }
+
+  pub fn debug_dump(&self) {
+    // - compute ast hash
+    // - use Display impl of ast as content for "<hash>.ast"
+    // - use fragment shader as content for "<hash>.frag"
+    // - implement some serialization/display for grammar and output
+    tracing::warn!("debug_dump() is not implemented yet");
+  }
 }
 
 pub fn load_shader_material(grammar: &Grammar, rng: &mut impl Rng, depth: isize) -> (Ast, Material) {

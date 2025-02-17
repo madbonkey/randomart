@@ -234,7 +234,10 @@ async fn command_gui_main(depth: u8, seed: u64) {
 
           ffmpeg_recording.replace(ffmpeg);
           t = 0f32;
-        }
+        },
+        KeyCode::D => {
+          shader_material.debug_dump();
+        },
         _ => {}
       }
     }
