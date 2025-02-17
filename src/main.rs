@@ -7,7 +7,7 @@ extern crate tracing;
 use std::time::SystemTime;
 
 use clap::{Parser, Subcommand};
-use rand::{Rng, rng, SeedableRng};
+use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 use rayon::iter::ParallelIterator;
 
@@ -31,7 +31,7 @@ enum Command {
   /// Generate random art images and save to disk
   Generate {
     /// Depth guide value of the function generation
-    #[arg(short, long, default_value_t = 10)]
+    #[arg(short, long, default_value_t = 55)]
     depth: u8,
 
     /// Size (width and height) of the generated image(s)
@@ -47,7 +47,15 @@ enum Command {
     seed: u64,
   },
   /// Launch random art GUI to play around with
-  Gui {},
+  Gui {
+    /// Depth guide value of the function generation
+    #[arg(short, long, default_value_t = 55)]
+    depth: u8,
+
+    /// Seed for the RNG
+    #[arg(long, default_value_t = 1337)]
+    seed: u64,
+  },
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -59,8 +67,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Command::Generate { depth, size, num_images, seed } => {
       command_generate(depth, size, num_images, seed)?;
     }
-    Command::Gui { .. } => {
-      command_gui()?;
+    Command::Gui { depth, seed } => {
+      command_gui(depth, seed)?;
     }
   }
 
@@ -70,10 +78,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 // ---
 
 fn command_generate(depth: u8, size: u16, num_images: u16, seed: u64) -> Result<(), Box<dyn std::error::Error>> {
-  info!("Image count: {}", num_images);
-  info!("Image size: {}", size);
-  info!("Generation depth: {}", depth);
   info!("Generation seed: {}", seed);
+  info!("Generation depth: {}", depth);
+  info!("Image size: {}", size);
+  info!("Image count: {}", num_images);
 
   let mut rng = seeded_rng(seed);
   let grammar = Grammar::new_sample();
@@ -85,9 +93,7 @@ fn command_generate(depth: u8, size: u16, num_images: u16, seed: u64) -> Result<
 
     let mut ast = grammar.generate_ast(&mut rng, depth as isize)?;
 
-    // info!("ast (pre-opt): {ast}");
     ast.optimize();
-    // info!("ast (post-opt): {ast}");
 
     let ast_hash = ast.sha256();
     info!("ast hash: {ast_hash:?}");
@@ -134,7 +140,7 @@ fn command_generate(depth: u8, size: u16, num_images: u16, seed: u64) -> Result<
   Ok(())
 }
 
-fn command_gui() -> Result<(), Box<dyn std::error::Error>> {
+fn command_gui(depth: u8, seed: u64) -> Result<(), Box<dyn std::error::Error>> {
   let conf = macroquad::window::Conf {
     window_title: "Test".to_owned(),
     window_width: 720,
@@ -144,24 +150,20 @@ fn command_gui() -> Result<(), Box<dyn std::error::Error>> {
     ..Default::default()
   };
 
-  macroquad::Window::from_config(conf, command_gui_main());
+  macroquad::Window::from_config(conf, command_gui_main(depth, seed));
 
   Ok(())
 }
 
-async fn command_gui_main() {
+async fn command_gui_main(depth: u8, seed: u64) {
   use macroquad::prelude::*;
 
   const MAX_DEPTH: isize = 150;
 
-  let mut depth = 75;
+  let mut depth = depth as isize;
 
-  let seed: u64 = {
-    let mut rng = rng();
-    rng.random()
-  };
-
-  tracing::info!("using seed {seed}");
+  tracing::info!("Generation seed: {}", seed);
+  tracing::info!("Initial depth: {}", depth);
 
   let mut rng = seeded_rng(seed);
 
@@ -172,6 +174,9 @@ async fn command_gui_main() {
   let mut show_hud = true;
   let mut paused = false;
   let mut t = 0f32;
+
+  let seed_text = format!("SEED  : {:0>4}", seed);
+  let seed_text_bounds = measure_text(seed_text.as_str(), None, 24, 1.0);
 
   loop {
     if is_key_pressed(KeyCode::R) {
@@ -195,7 +200,6 @@ async fn command_gui_main() {
 
     clear_background(BLACK);
 
-
     if !paused {
       t = get_time() as f32;
       material.set_uniform("elapsed", t);
@@ -206,10 +210,11 @@ async fn command_gui_main() {
     gl_use_default_material();
 
     if show_hud {
-      draw_rectangle(0., 0., 120., 70., Color::from_rgba(0, 0, 0, 190));
-      draw_text(format!("FPS : {:0>4}", get_fps()).as_str(), 4., 20., 24., WHITE);
-      draw_text(format!("D   : {:0>4}", depth).as_str(), 4., 40., 24., WHITE);
-      draw_text(format!("T   : {:.2}", (t.sin() + 1.0) / 2.0).as_str(), 4., 60., 24., WHITE);
+      draw_rectangle(4., 4., seed_text_bounds.width + 12., 96., Color::from_rgba(0, 0, 0, 190));
+      draw_text(seed_text.as_str(), 10., 26., 24., WHITE);
+      draw_text(format!("DEPTH : {:0>4}", depth).as_str(), 10., 46., 24., WHITE);
+      draw_text(format!("FPS   : {:0>4}", get_fps()).as_str(), 10., 66., 24., WHITE);
+      draw_text(format!("TIME  : {:.2}", (t.sin() + 1.0) / 2.0).as_str(), 10., 86., 24., WHITE);
     }
 
     next_frame().await
