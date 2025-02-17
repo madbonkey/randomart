@@ -175,6 +175,7 @@ async fn command_gui_main(depth: u8, seed: u64) {
   let mut show_hud = true;
   let mut paused = false;
   let mut t = 0f32;
+  let mut fps = 60;
 
   let seed_text = format!("SEED  : {:0>4}", seed);
   let seed_text_bounds = measure_text(seed_text.as_str(), None, 24, 1.0);
@@ -211,15 +212,28 @@ async fn command_gui_main(depth: u8, seed: u64) {
     gl_use_default_material();
 
     if show_hud {
+      fps = get_smooth_fps(&mut fps, get_fps());
+
       draw_rectangle(4., 4., seed_text_bounds.width + 12., 96., Color::from_rgba(0, 0, 0, 190));
       draw_text(seed_text.as_str(), 10., 26., 24., WHITE);
       draw_text(format!("DEPTH : {:0>4}", depth).as_str(), 10., 46., 24., WHITE);
-      draw_text(format!("FPS   : {:0>4}", get_fps()).as_str(), 10., 66., 24., WHITE);
+      draw_text(format!("FPS   : {:0>4}", fps).as_str(), 10., 66., 24., WHITE);
       draw_text(format!("TIME  : {:.2}", (t.sin() + 1.0) / 2.0).as_str(), 10., 86., 24., WHITE);
     }
 
     next_frame().await
   }
+}
+
+fn get_smooth_fps(fps: &mut i32, current_fps: i32) -> i32 {
+  const ALPHA: f32 = 0.025;
+
+  let smooth = (ALPHA * (current_fps as f32) + (1.0 - ALPHA) * (*fps as f32)).floor();
+  let smooth = smooth as i32;
+
+  *fps = smooth;
+
+  smooth
 }
 
 // ---

@@ -521,7 +521,8 @@ impl Eval for FnNode {
   }
 }
 
-const fn mix_f32(x: f32, y: f32, a: f32) -> f32 {
+#[inline]
+fn mix_f32(x: f32, y: f32, a: f32) -> f32 {
   let a = a.clamp(0.0, 1.0);
   x * (1.0 - a) + y * a
 }
