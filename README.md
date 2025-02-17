@@ -28,6 +28,35 @@ Options:
   -V, --version  Print version
 ```
 
+Currently, the grammar for generating the image/shader function is hard-coded. In pseudo-BNF it is:
+
+```
+E :=
+  | color(<C>, <C>, <C>)
+
+C :=
+  | 2:<A>
+  | 4:add(<C>, <C>)
+  | 4:mul(<C>, <C>)
+  | 3:sqrt(<C>)
+  | 3:sin(<C>)
+  | mix(<C>, <C>, <A>)
+  | mod(<C>, <A>)
+
+A :=
+  | 2:rand()
+  | 3:@x
+  | 3:@y
+  | @t
+```
+
+Where
+
+* `E` is the entry point rule
+* `2:`, `3:`, etc. denote weight multipliers
+* `<X>` refers to another rule
+* `@x`, `@y` and `@t` are variables
+
 ### Commands
 
 #### `generate`
