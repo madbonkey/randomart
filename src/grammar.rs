@@ -72,6 +72,14 @@ impl Grammar {
             },
             Branch {
               weight: 1,
+              kind: BranchKind::Fn(FnBranch::Mix(
+                Box::new(BranchKind::Rule('C')),
+                Box::new(BranchKind::Rule('C')),
+                Box::new(BranchKind::Rule('A')),
+              )),
+            },
+            Branch {
+              weight: 1,
               kind: BranchKind::Fn(FnBranch::Mod(
                 Box::new(BranchKind::Rule('C')),
                 Box::new(BranchKind::Rule('A')),
@@ -248,6 +256,18 @@ impl BranchKind {
             let v = rng.random::<f32>();
             Ok(Node::from(ScalarNode::new(v)))
           }
+          FnBranch::Sqrt(b) => {
+            let b = b.generate_node(rng, grammar, depth - 1)?;
+            Ok(Node::from(FnNode::sqrt(b)))
+          }
+          FnBranch::Sin(b) => {
+            let b = b.generate_node(rng, grammar, depth - 1)?;
+            Ok(Node::from(FnNode::sin(b)))
+          }
+          FnBranch::Cos(b) => {
+            let b = b.generate_node(rng, grammar, depth - 1)?;
+            Ok(Node::from(FnNode::cos(b)))
+          }
           FnBranch::Add(l, r) => {
             let l = l.generate_node(rng, grammar, depth - 1)?;
             let r = r.generate_node(rng, grammar, depth - 1)?;
@@ -262,19 +282,13 @@ impl BranchKind {
             let l = l.generate_node(rng, grammar, depth - 1)?;
             let r = r.generate_node(rng, grammar, depth - 1)?;
             Ok(Node::from(FnNode::modulo(l, r)))
-          }
-          FnBranch::Sqrt(b) => {
-            let b = b.generate_node(rng, grammar, depth - 1)?;
-            Ok(Node::from(FnNode::sqrt(b)))
-          }
-          FnBranch::Sin(b) => {
-            let b = b.generate_node(rng, grammar, depth - 1)?;
-            Ok(Node::from(FnNode::sin(b)))
-          }
-          FnBranch::Cos(b) => {
-            let b = b.generate_node(rng, grammar, depth - 1)?;
-            Ok(Node::from(FnNode::cos(b)))
-          }
+          },
+          FnBranch::Mix(x, y, a) => {
+            let x = x.generate_node(rng, grammar, depth - 1)?;
+            let y = y.generate_node(rng, grammar, depth - 1)?;
+            let a = a.generate_node(rng, grammar, depth - 1)?;
+            Ok(Node::from(FnNode::mix(x, y, a)))
+          },
         }
       }
       BranchKind::Color(c) => {
@@ -302,11 +316,12 @@ pub struct ColorBranch {
 #[derive(Debug)]
 pub enum FnBranch {
   Random,
-  Add(Box<BranchKind>, Box<BranchKind>),
-  Mul(Box<BranchKind>, Box<BranchKind>),
-  Mod(Box<BranchKind>, Box<BranchKind>),
   Sqrt(Box<BranchKind>),
   Sin(Box<BranchKind>),
   Cos(Box<BranchKind>),
+  Add(Box<BranchKind>, Box<BranchKind>),
+  Mul(Box<BranchKind>, Box<BranchKind>),
+  Mod(Box<BranchKind>, Box<BranchKind>),
+  Mix(Box<BranchKind>, Box<BranchKind>, Box<BranchKind>),
 }
 

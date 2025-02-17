@@ -89,9 +89,9 @@ fn compile_fragment_shader(ast: &Ast) -> String {
   let g = compile_fragment_shader_node_temp(g);
   let b = compile_fragment_shader_node_temp(b);
 
-  write!(&mut s, "ret.x = {r};").expect("write red channel expression");
-  write!(&mut s, "ret.y = {g};").expect("write green channel expression");
-  write!(&mut s, "ret.z = {b};").expect("write blue channel expression");
+  write!(&mut s, "ret.x = {r};\n").expect("write red channel expression");
+  write!(&mut s, "ret.y = {g};\n").expect("write green channel expression");
+  write!(&mut s, "ret.z = {b};\n").expect("write blue channel expression");
 
   s.push_str(fs_end);
 
@@ -173,6 +173,15 @@ fn compile_fragment_shader_node_fn(node: &FnNode, out: &mut String) {
       out.push(',');
       compile_fragment_shader_node(r, out);
       out.push(')');
+    },
+    FnNode::Mix(x, y, a) => {
+      out.push_str("mix(");
+      compile_fragment_shader_node(x, out);
+      out.push(',');
+      compile_fragment_shader_node(y, out);
+      out.push_str(",clamp(");
+      compile_fragment_shader_node(a, out);
+      out.push_str(", 0.0, 1.0))");
     }
   }
 }

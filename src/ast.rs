@@ -124,7 +124,7 @@ impl Node {
     match self {
       Self::Color(inner) => {
         inner.optimize()
-      },
+      }
       Self::Fn(inner) => {
         let io = inner.optimize();
 
@@ -135,32 +135,37 @@ impl Node {
             if let Some(yep) = optimize_unary_fn(n, |n| n.abs().sqrt()) {
               replacement.replace(yep);
             }
-          },
+          }
           FnNode::Sin(n) => {
             if let Some(yep) = optimize_unary_fn(n, |n| n.sin()) {
               replacement.replace(yep);
             }
-          },
+          }
           FnNode::Cos(n) => {
             if let Some(yep) = optimize_unary_fn(n, |n| n.cos()) {
               replacement.replace(yep);
             }
-          },
+          }
           FnNode::Add(l, r) => {
             if let Some(yep) = optimize_binary_fn(l, r, |l, r| l + r) {
               replacement.replace(yep);
             }
-          },
+          }
           FnNode::Mul(l, r) => {
             if let Some(yep) = optimize_binary_fn(l, r, |l, r| l * r) {
               replacement.replace(yep);
             }
-          },
+          }
           FnNode::Mod(l, r) => {
             if let Some(yep) = optimize_binary_fn(l, r, |l, r| l % r) {
               replacement.replace(yep);
             }
-          },
+          }
+          FnNode::Mix(x, y, a) => {
+            if let Some(yep) = optimize_ternary_fn(x, y, a, |x, y, a| mix_f32(x, y, a)) {
+              replacement.replace(yep);
+            }
+          }
         }
 
         if let Some(replacement) = replacement {
@@ -170,11 +175,11 @@ impl Node {
         } else {
           io
         }
-      },
+      }
       _ => {
         // remaining node types cannot be optimized
         false
-      },
+      }
     }
   }
 }
@@ -197,6 +202,23 @@ fn optimize_binary_fn<F>(l: &BoxNode, r: &BoxNode, f: F) -> Option<Node>
       Node::Scalar(r) => {
         let v = f(l.value, r.value);
         Some(Node::Scalar(ScalarNode::new(v)))
+      }
+      _ => None
+    },
+    _ => None,
+  }
+}
+
+fn optimize_ternary_fn<F>(x: &BoxNode, y: &BoxNode, z: &BoxNode, f: F) -> Option<Node>
+  where F: FnOnce(f32, f32, f32) -> f32 {
+  match x.as_ref() {
+    Node::Scalar(x) => match y.as_ref() {
+      Node::Scalar(y) => match z.as_ref() {
+        Node::Scalar(z) => {
+          let v = f(x.value, y.value, z.value);
+          Some(Node::Scalar(ScalarNode::new(v)))
+        }
+        _ => None,
       },
       _ => None
     },
@@ -389,6 +411,7 @@ pub enum FnNode {
   Add(BoxNode, BoxNode),
   Mul(BoxNode, BoxNode),
   Mod(BoxNode, BoxNode),
+  Mix(BoxNode, BoxNode, BoxNode),
 }
 
 impl FnNode {
@@ -416,32 +439,42 @@ impl FnNode {
     Self::Mod(lhs.into(), rhs.into())
   }
 
+  pub fn mix(x: impl Into<BoxNode>, y: impl Into<BoxNode>, a: impl Into<BoxNode>) -> Self {
+    Self::Mix(x.into(), y.into(), a.into())
+  }
+
   pub fn optimize(&mut self) -> bool {
     match self {
       Self::Sqrt(inner) => {
         inner.optimize()
-      },
+      }
       Self::Sin(inner) => {
         inner.optimize()
-      },
+      }
       Self::Cos(inner) => {
         inner.optimize()
-      },
+      }
       Self::Add(l, r) => {
         let lo = l.optimize();
         let ro = r.optimize();
         lo || ro
-      },
+      }
       Self::Mul(l, r) => {
         let lo = l.optimize();
         let ro = r.optimize();
         lo || ro
-      },
+      }
       Self::Mod(l, r) => {
         let lo = l.optimize();
         let ro = r.optimize();
         lo || ro
-      },
+      }
+      Self::Mix(x, y, a) => {
+        let xo = x.optimize();
+        let yo = y.optimize();
+        let ao = a.optimize();
+        xo || yo || ao
+      }
     }
   }
 }
@@ -478,8 +511,19 @@ impl Eval for FnNode {
         let b = b.eval(env)?.scalar_value()?;
         Ok(a % b)
       }
+      FnNode::Mix(x, y, a) => {
+        let x = x.eval(env)?.scalar_value()?;
+        let y = y.eval(env)?.scalar_value()?;
+        let a = a.eval(env)?.scalar_value()?;
+        Ok(mix_f32(x, y, a))
+      }
     }
   }
+}
+
+const fn mix_f32(x: f32, y: f32, a: f32) -> f32 {
+  let a = a.clamp(0.0, 1.0);
+  x * (1.0 - a) + y * a
 }
 
 impl Display for FnNode {
@@ -491,6 +535,7 @@ impl Display for FnNode {
       FnNode::Add(l, r) => f.write_fmt(format_args!("{l} + {r}")),
       FnNode::Mul(l, r) => f.write_fmt(format_args!("{l} * {r}")),
       FnNode::Mod(l, r) => f.write_fmt(format_args!("{l} % {r}")),
+      FnNode::Mix(x, y, a) => f.write_fmt(format_args!("mix({x}, {y}, {a})")),
     }
   }
 }

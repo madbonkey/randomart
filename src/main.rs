@@ -170,6 +170,7 @@ async fn command_gui_main(depth: u8, seed: u64) {
   let grammar = Grammar::new_sample();
 
   let (mut ast, mut material) = load_shader_material(&grammar, &mut rng, depth);
+  tracing::info!("Generated AST:\n{ast}\n---");
 
   let mut show_hud = true;
   let mut paused = false;
@@ -181,7 +182,7 @@ async fn command_gui_main(depth: u8, seed: u64) {
   loop {
     if is_key_pressed(KeyCode::R) {
       let (a, m) = load_shader_material(&grammar, &mut rng, depth);
-      tracing::info!("regenerated AST:\n{ast}\n---");
+      tracing::info!("Regenerated AST:\n{ast}\n---");
       ast = a;
       material = m;
     } else if is_key_pressed(KeyCode::Space) {
