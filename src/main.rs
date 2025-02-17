@@ -13,7 +13,7 @@ use rayon::iter::ParallelIterator;
 
 use crate::ast::{Env, Eval};
 use crate::grammar::Grammar;
-use crate::shader::load_shader_material;
+use crate::shader::ShaderMaterial;
 
 pub mod ast;
 pub mod grammar;
@@ -169,8 +169,7 @@ async fn command_gui_main(depth: u8, seed: u64) {
 
   let grammar = Grammar::new_sample();
 
-  let (mut ast, mut material) = load_shader_material(&grammar, &mut rng, depth);
-  tracing::info!("Generated AST:\n{ast}\n---");
+  let mut shader_material = ShaderMaterial::new(&grammar, &mut rng, depth);
 
   let mut show_hud = true;
   let mut paused = false;
@@ -181,11 +180,15 @@ async fn command_gui_main(depth: u8, seed: u64) {
   let seed_text_bounds = measure_text(seed_text.as_str(), None, 24, 1.0);
 
   loop {
-    if is_key_pressed(KeyCode::R) {
-      let (a, m) = load_shader_material(&grammar, &mut rng, depth);
-      tracing::info!("Regenerated AST:\n{ast}\n---");
-      ast = a;
-      material = m;
+    if is_key_pressed(KeyCode::N) {
+      shader_material.next(&grammar, &mut rng, depth);
+      t = 0f32;
+    } else if is_key_pressed(KeyCode::Left) {
+      shader_material.history_backward();
+      t = 0f32;
+    } else if is_key_pressed(KeyCode::Right) {
+      shader_material.history_forward();
+      t = 0f32;
     } else if is_key_pressed(KeyCode::Space) {
       paused = !paused;
     } else if is_key_pressed(KeyCode::RightBracket) && depth < MAX_DEPTH {
@@ -194,8 +197,6 @@ async fn command_gui_main(depth: u8, seed: u64) {
     } else if is_key_pressed(KeyCode::Slash) && depth > 1 {
       let next_depth = depth - if is_key_down(KeyCode::LeftShift) { 10 } else { 1 };
       depth = next_depth.clamp(1, MAX_DEPTH);
-    } else if is_key_pressed(KeyCode::A) {
-      tracing::info!("AST:\n{ast}");
     } else if is_key_pressed(KeyCode::H) {
       show_hud = !show_hud;
     }
@@ -203,22 +204,28 @@ async fn command_gui_main(depth: u8, seed: u64) {
     clear_background(BLACK);
 
     if !paused {
-      t = get_time() as f32;
-      material.set_uniform("elapsed", t);
+      t += get_frame_time();
+
+      shader_material
+        .current_material()
+        .set_uniform("elapsed", t);
     }
 
-    gl_use_material(&material);
+    gl_use_material(shader_material.current_material());
     draw_rectangle(0., 0., screen_width(), screen_height(), BLANK);
     gl_use_default_material();
 
     if show_hud {
       fps = get_smooth_fps(&mut fps, get_fps());
 
-      draw_rectangle(4., 4., seed_text_bounds.width + 12., 96., Color::from_rgba(0, 0, 0, 190));
+      draw_rectangle(4., 4., seed_text_bounds.width + 12., 116., Color::from_rgba(0, 0, 0, 190));
+
       draw_text(seed_text.as_str(), 10., 26., 24., WHITE);
-      draw_text(format!("DEPTH : {:0>4}", depth).as_str(), 10., 46., 24., WHITE);
-      draw_text(format!("FPS   : {:0>4}", fps).as_str(), 10., 66., 24., WHITE);
-      draw_text(format!("TIME  : {:.2}", (t.sin() + 1.0) / 2.0).as_str(), 10., 86., 24., WHITE);
+      let (hc, hm, ht) = shader_material.history_info();
+      draw_text(format!("HIST  : {hc}/{hm} ({ht})").as_str(), 10., 46., 24., WHITE);
+      draw_text(format!("TIME  : {:.2}", (t.sin() + 1.0) / 2.0).as_str(), 10., 66., 24., WHITE);
+      draw_text(format!("DEPTH : {:0>4}", depth).as_str(), 10., 86., 24., WHITE);
+      draw_text(format!("FPS   : {:0>4}", fps).as_str(), 10., 106., 24., WHITE);
     }
 
     next_frame().await

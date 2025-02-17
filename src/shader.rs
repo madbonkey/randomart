@@ -45,6 +45,58 @@ const FRAGMENT_SHADER_TEMPLATE: &str = /*language=glsl*/ "#version 100
 
 const FRAGMENT_SHADER_INSERT_MARKER: &str = "// ___INSERT_MARKER___";
 
+pub struct ShaderMaterial {
+  current: usize,
+  total: usize,
+  history: Vec<(Ast, Material)>,
+}
+
+impl ShaderMaterial {
+  const MAX_HISTORY: usize = 10;
+  const HISTORY_SWAP_TAKEOVER: usize = 5;
+
+  pub fn new(grammar: &Grammar, rng: &mut impl Rng, depth: isize) -> Self {
+    let top = load_shader_material(grammar, rng, depth);
+    let mut history = Vec::with_capacity(Self::MAX_HISTORY);
+    history.push(top);
+
+    Self { current: 0, total: 1, history }
+  }
+
+  pub fn current_material(&self) -> &Material {
+    &self.history[self.current].1
+  }
+
+  pub fn next(&mut self, grammar: &Grammar, rng: &mut impl Rng, depth: isize) {
+    if self.history.len() == Self::MAX_HISTORY {
+      let prev = std::mem::replace(&mut self.history, Vec::with_capacity(Self::MAX_HISTORY));
+      for prev in prev.into_iter().take(Self::HISTORY_SWAP_TAKEOVER) {
+        self.history.push(prev);
+      }
+      self.current = Self::HISTORY_SWAP_TAKEOVER - 1;
+    }
+
+    let top = load_shader_material(grammar, rng, depth);
+    self.history.push(top);
+    self.current = self.history.len() - 1;
+    self.total += 1;
+  }
+
+  pub fn history_forward(&mut self) {
+    if self.current == self.history.len() - 1 { return; }
+    self.current = self.current + 1;
+  }
+
+  pub fn history_backward(&mut self) {
+    if self.current == 0 { return; }
+    self.current = self.current - 1;
+  }
+
+  pub fn history_info(&self) -> (usize, usize, usize) {
+    (self.current + 1, self.history.len(), self.total)
+  }
+}
+
 pub fn load_shader_material(grammar: &Grammar, rng: &mut impl Rng, depth: isize) -> (Ast, Material) {
   let mut ast = grammar.generate_ast(rng, depth).expect("ast generation");
   ast.optimize();
