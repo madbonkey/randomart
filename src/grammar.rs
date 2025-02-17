@@ -59,15 +59,22 @@ impl Grammar {
               )),
             },
             Branch {
-              weight: 3,
+              weight: 2,
               kind: BranchKind::Fn(FnBranch::Sqrt(
                 Box::new(BranchKind::Rule('C')),
               )),
             },
             Branch {
-              weight: 3,
+              weight: 2,
               kind: BranchKind::Fn(FnBranch::Sin(
                 Box::new(BranchKind::Rule('C')),
+              )),
+            },
+            Branch {
+              weight: 1,
+              kind: BranchKind::Fn(FnBranch::Mod(
+                Box::new(BranchKind::Rule('C')),
+                Box::new(BranchKind::Rule('A')),
               )),
             },
           ],
@@ -80,11 +87,11 @@ impl Grammar {
               kind: BranchKind::Fn(FnBranch::Random),
             },
             Branch {
-              weight: 1,
+              weight: 2,
               kind: BranchKind::Var('x'),
             },
             Branch {
-              weight: 1,
+              weight: 2,
               kind: BranchKind::Var('y'),
             },
             Branch {
@@ -251,6 +258,11 @@ impl BranchKind {
             let r = r.generate_node(rng, grammar, depth - 1)?;
             Ok(Node::from(FnNode::mul(l, r)))
           }
+          FnBranch::Mod(l, r) => {
+            let l = l.generate_node(rng, grammar, depth - 1)?;
+            let r = r.generate_node(rng, grammar, depth - 1)?;
+            Ok(Node::from(FnNode::modulo(l, r)))
+          }
           FnBranch::Sqrt(b) => {
             let b = b.generate_node(rng, grammar, depth - 1)?;
             Ok(Node::from(FnNode::sqrt(b)))
@@ -292,6 +304,7 @@ pub enum FnBranch {
   Random,
   Add(Box<BranchKind>, Box<BranchKind>),
   Mul(Box<BranchKind>, Box<BranchKind>),
+  Mod(Box<BranchKind>, Box<BranchKind>),
   Sqrt(Box<BranchKind>),
   Sin(Box<BranchKind>),
   Cos(Box<BranchKind>),

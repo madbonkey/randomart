@@ -83,9 +83,13 @@ fn command_generate(depth: u8, size: u16, num_images: u16, seed: u64) -> Result<
   for _ in 0..num_images {
     use image::RgbaImage;
 
-    let ast = grammar.generate_ast(&mut rng, depth as isize)?;
-    let ast_hash = ast.sha256();
+    let mut ast = grammar.generate_ast(&mut rng, depth as isize)?;
 
+    // info!("ast (pre-opt): {ast}");
+    ast.optimize();
+    // info!("ast (post-opt): {ast}");
+
+    let ast_hash = ast.sha256();
     info!("ast hash: {ast_hash:?}");
 
     let output = format!("output/ast_{ast_hash}.png");
@@ -172,6 +176,7 @@ async fn command_gui_main() {
   loop {
     if is_key_pressed(KeyCode::R) {
       let (a, m) = load_shader_material(&grammar, &mut rng, depth);
+      tracing::info!("regenerated AST:\n{ast}\n---");
       ast = a;
       material = m;
     } else if is_key_pressed(KeyCode::Space) {

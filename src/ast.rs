@@ -61,6 +61,16 @@ impl Ast {
     let input = format!("{}", self.root);
     digest(input)
   }
+
+  pub fn optimize(&mut self) {
+    let mut optimized = self.root.optimize();
+    let mut max_passes = 10;
+
+    while optimized && max_passes > 0 {
+      optimized = self.root.optimize();
+      max_passes -= 1;
+    }
+  }
 }
 
 impl Eval for Ast {
@@ -109,7 +119,90 @@ impl Eval for Node {
   }
 }
 
-impl Node {}
+impl Node {
+  pub fn optimize(&mut self) -> bool {
+    match self {
+      Self::Color(inner) => {
+        inner.optimize()
+      },
+      Self::Fn(inner) => {
+        let io = inner.optimize();
+
+        let mut replacement = None;
+
+        match inner {
+          FnNode::Sqrt(n) => {
+            if let Some(yep) = optimize_unary_fn(n, |n| n.abs().sqrt()) {
+              replacement.replace(yep);
+            }
+          },
+          FnNode::Sin(n) => {
+            if let Some(yep) = optimize_unary_fn(n, |n| n.sin()) {
+              replacement.replace(yep);
+            }
+          },
+          FnNode::Cos(n) => {
+            if let Some(yep) = optimize_unary_fn(n, |n| n.cos()) {
+              replacement.replace(yep);
+            }
+          },
+          FnNode::Add(l, r) => {
+            if let Some(yep) = optimize_binary_fn(l, r, |l, r| l + r) {
+              replacement.replace(yep);
+            }
+          },
+          FnNode::Mul(l, r) => {
+            if let Some(yep) = optimize_binary_fn(l, r, |l, r| l * r) {
+              replacement.replace(yep);
+            }
+          },
+          FnNode::Mod(l, r) => {
+            if let Some(yep) = optimize_binary_fn(l, r, |l, r| l % r) {
+              replacement.replace(yep);
+            }
+          },
+        }
+
+        if let Some(replacement) = replacement {
+          tracing::debug!("replacing {:?} with {replacement:?}", self);
+          let _ = std::mem::replace(self, replacement);
+          true
+        } else {
+          io
+        }
+      },
+      _ => {
+        // remaining node types cannot be optimized
+        false
+      },
+    }
+  }
+}
+
+fn optimize_unary_fn<F>(n: &BoxNode, f: F) -> Option<Node>
+  where F: FnOnce(f32) -> f32 {
+  match n.as_ref() {
+    Node::Scalar(n) => {
+      let v = f(n.value);
+      Some(Node::Scalar(ScalarNode::new(v)))
+    }
+    _ => None,
+  }
+}
+
+fn optimize_binary_fn<F>(l: &BoxNode, r: &BoxNode, f: F) -> Option<Node>
+  where F: FnOnce(f32, f32) -> f32 {
+  match l.as_ref() {
+    Node::Scalar(l) => match r.as_ref() {
+      Node::Scalar(r) => {
+        let v = f(l.value, r.value);
+        Some(Node::Scalar(ScalarNode::new(v)))
+      },
+      _ => None
+    },
+    _ => None,
+  }
+}
 
 impl From<VarNode> for Node {
   fn from(value: VarNode) -> Self { Self::Var(value) }
@@ -247,6 +340,13 @@ impl ColorNode {
   pub fn nodes(&self) -> (&BoxNode, &BoxNode, &BoxNode) {
     (&self.r, &self.g, &self.b)
   }
+
+  pub fn optimize(&mut self) -> bool {
+    let ro = self.r.optimize();
+    let go = self.g.optimize();
+    let bo = self.b.optimize();
+    ro || go || bo
+  }
 }
 
 impl Eval for ColorNode {
@@ -315,6 +415,35 @@ impl FnNode {
   pub fn modulo(lhs: impl Into<BoxNode>, rhs: impl Into<BoxNode>) -> Self {
     Self::Mod(lhs.into(), rhs.into())
   }
+
+  pub fn optimize(&mut self) -> bool {
+    match self {
+      Self::Sqrt(inner) => {
+        inner.optimize()
+      },
+      Self::Sin(inner) => {
+        inner.optimize()
+      },
+      Self::Cos(inner) => {
+        inner.optimize()
+      },
+      Self::Add(l, r) => {
+        let lo = l.optimize();
+        let ro = r.optimize();
+        lo || ro
+      },
+      Self::Mul(l, r) => {
+        let lo = l.optimize();
+        let ro = r.optimize();
+        lo || ro
+      },
+      Self::Mod(l, r) => {
+        let lo = l.optimize();
+        let ro = r.optimize();
+        lo || ro
+      },
+    }
+  }
 }
 
 impl Eval for FnNode {
@@ -324,7 +453,7 @@ impl Eval for FnNode {
     match self {
       FnNode::Sqrt(inner) => {
         let v = inner.eval(env)?.scalar_value()?;
-        Ok(v.sqrt())
+        Ok(v.abs().sqrt())
       }
       FnNode::Sin(inner) => {
         let v = inner.eval(env)?.scalar_value()?;

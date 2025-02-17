@@ -23,24 +23,31 @@ const DEFAULT_VERTEX_SHADER: &str = /*language=glsl*/ "#version 100
   }
 ";
 
-const FRAGMENT_SHADER_START: &str = "#version 100
-precision mediump float;
-uniform float elapsed;
-varying vec2 uv;
-void main() {
+const FRAGMENT_SHADER_TEMPLATE: &str = /*language=glsl*/ "#version 100
+  precision mediump float;
+  uniform float elapsed;
+  varying vec2 uv;
+
+  vec3 compute(float x, float y, float t) {
+    vec3 ret = vec3(0, 0, 0);
+    // ___INSERT_MARKER___
+    return ret;
+  }
+
+  void main() {
     float x = uv.x;
     float y = uv.y;
     float t = (sin(elapsed) + 1.0) / 2.0;
 
-    vec3 ast_color = ";
-
-const FRAGMENT_SHADER_END: &str = "
-    gl_FragColor = vec4(ast_color, 1);
-}
+    gl_FragColor = vec4(compute(x, y, t), 1);
+  }
 ";
 
+const FRAGMENT_SHADER_INSERT_MARKER: &str = "// ___INSERT_MARKER___";
+
 pub fn load_shader_material(grammar: &Grammar, rng: &mut impl Rng, depth: isize) -> (Ast, Material) {
-  let ast = grammar.generate_ast(rng, depth).expect("ast generation");
+  let mut ast = grammar.generate_ast(rng, depth).expect("ast generation");
+  ast.optimize();
 
   let vertex_shader = DEFAULT_VERTEX_SHADER.to_string();
   let fragment_shader = compile_fragment_shader(&ast);
@@ -56,13 +63,24 @@ pub fn load_shader_material(grammar: &Grammar, rng: &mut impl Rng, depth: isize)
       ],
       ..Default::default()
     },
-  ).expect("load material");
+  );
 
-  (ast, material)
+  match material {
+    Ok(material) => (ast, material),
+    Err(e) => {
+      tracing::error!("{e}\n{fragment_shader}");
+      panic!("Shader compilation failed");
+    },
+  }
 }
 
 fn compile_fragment_shader(ast: &Ast) -> String {
-  let mut s = String::from(FRAGMENT_SHADER_START);
+  let (fs_start, fs_end) = FRAGMENT_SHADER_TEMPLATE
+    .split_once(FRAGMENT_SHADER_INSERT_MARKER)
+    .expect("could not split on fragment shader insert marker");
+
+  let mut s = String::from(fs_start);
+
   let root = ast.root();
 
   let (r, g, b) = root.nodes();
@@ -71,9 +89,11 @@ fn compile_fragment_shader(ast: &Ast) -> String {
   let g = compile_fragment_shader_node_temp(g);
   let b = compile_fragment_shader_node_temp(b);
 
-  write!(&mut s, "vec3({r}, {g}, {b});").expect("write ColorNode");
+  write!(&mut s, "ret.x = {r};").expect("write red channel expression");
+  write!(&mut s, "ret.y = {g};").expect("write green channel expression");
+  write!(&mut s, "ret.z = {b};").expect("write blue channel expression");
 
-  s.push_str(FRAGMENT_SHADER_END);
+  s.push_str(fs_end);
 
   s
 }
@@ -87,7 +107,7 @@ fn compile_fragment_shader_node_temp(node: &Node) -> String {
 fn compile_fragment_shader_node(node: &Node, out: &mut String) {
   match node {
     Node::Scalar(inner) => {
-      write!(out, "{}", inner.value()).expect("write Node::Scalar");
+      write!(out, "{:.8}", inner.value()).expect("write Node::Scalar");
     }
     Node::Var(inner) => {
       let c = match inner {
