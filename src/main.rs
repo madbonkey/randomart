@@ -160,8 +160,8 @@ fn command_gui(depth: u8, seed: u64) -> Result<(), Box<dyn std::error::Error>> {
 async fn command_gui_main(depth: u8, seed: u64) {
   use macroquad::prelude::*;
 
+  const MIN_DEPTH: isize = 5;
   const MAX_DEPTH: isize = 150;
-  const TAU: f32 = 6.283_185_5;
 
   let mut depth = depth as isize;
 
@@ -182,7 +182,7 @@ async fn command_gui_main(depth: u8, seed: u64) {
   let mut ffmpeg = Ffmpeg::default();
 
   let mut ffmpeg_frame_count = 0usize;
-  let ffmpeg_target_frame_count = (TAU * 60.).ceil() as usize;
+  let ffmpeg_target_frame_count = (shader_material.time_wave().oscillation_period() * 60.).ceil() as usize;
 
   let mut t = 0f32;
   let mut fps = 60;
@@ -192,7 +192,7 @@ async fn command_gui_main(depth: u8, seed: u64) {
 
   loop {
     // time processing
-    if !paused {
+    if !paused || ffmpeg.is_recording() {
       t += if ffmpeg.is_recording() { 1.0 / 60. } else { get_frame_time() };
     }
 
@@ -211,16 +211,16 @@ async fn command_gui_main(depth: u8, seed: u64) {
           shader_material.history_forward();
           t = 0f32;
         }
-        KeyCode::Space => {
+        KeyCode::Space if !ffmpeg.is_recording() => {
           paused = !paused;
         }
         KeyCode::RightBracket if depth < MAX_DEPTH => {
           let next_depth = depth + if is_key_down(KeyCode::LeftShift) { 10 } else { 1 };
-          depth = next_depth.clamp(1, MAX_DEPTH);
+          depth = next_depth.clamp(MIN_DEPTH, MAX_DEPTH);
         }
-        KeyCode::Slash if depth > 1 => {
+        KeyCode::Slash if depth > MIN_DEPTH => {
           let next_depth = depth - if is_key_down(KeyCode::LeftShift) { 10 } else { 1 };
-          depth = next_depth.clamp(1, MAX_DEPTH);
+          depth = next_depth.clamp(MIN_DEPTH, MAX_DEPTH);
         }
         KeyCode::H => {
           show_hud = !show_hud;
@@ -288,8 +288,9 @@ async fn command_gui_main(depth: u8, seed: u64) {
 
         draw_text(seed_text.as_str(), 10., 26., 24., WHITE);
         let (_, _, ht) = shader_material.history_info();
+        let t_display = shader_material.time_wave().calc(t);
         draw_text(format!("HIST  : {ht}").as_str(), 10., 46., 24., WHITE);
-        draw_text(format!("TIME  : {:.2}", (t.sin() + 1.0) / 2.0).as_str(), 10., 66., 24., WHITE);
+        draw_text(format!("TIME  : {:.2}", t_display).as_str(), 10., 66., 24., WHITE);
         draw_text(format!("DEPTH : {:0>4}", depth).as_str(), 10., 86., 24., WHITE);
         draw_text(format!("FPS   : {:0>4}", fps).as_str(), 10., 106., 24., WHITE);
       } else {

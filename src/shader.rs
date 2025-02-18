@@ -12,10 +12,10 @@ const DEFAULT_VERTEX_SHADER: &str = /*language=glsl*/ "#version 100
   attribute vec3 position;
   attribute vec2 texcoord;
 
-  varying lowp vec2 uv;
-
   uniform mat4 Model;
   uniform mat4 Projection;
+
+  varying lowp vec2 uv;
 
   void main() {
       gl_Position = Projection * Model * vec4(position, 1);
@@ -25,21 +25,64 @@ const DEFAULT_VERTEX_SHADER: &str = /*language=glsl*/ "#version 100
 
 const FRAGMENT_SHADER_TEMPLATE: &str = /*language=glsl*/ "#version 100
   precision mediump float;
-  uniform float elapsed;
+
+  uniform float t;
+
   varying vec2 uv;
 
   void main() {
     float x = uv.x;
     float y = uv.y;
-    float t = (sin(elapsed) + 1.0) / 2.0;
     // ___INSERT_MARKER___
     gl_FragColor.a = 1.0;
   }
 ";
 
 const FRAGMENT_SHADER_INSERT_MARKER: &str = "// ___INSERT_MARKER___";
+const FRAGMENT_SHADER_TIME_VAR: &str = "t";
+
+pub enum TimeWave {
+  Sine,
+  Triangle,
+}
+
+impl TimeWave {
+  const PERIOD_SINE: f32 = 6.283_185_5;
+  const PERIOD_TRIANGLE: f32 = 4.0;
+
+  #[inline]
+  pub fn calc(&self, t: f32) -> f32 {
+    match self {
+      Self::Sine => Self::norm(t.sin()),
+      Self::Triangle => {
+        let p = Self::PERIOD_TRIANGLE;
+        let x = (t + 1.0) % p;
+        let r = if x < p / 2.0 {
+          (4.0 / p) * x - 1.0
+        } else {
+          3.0 - (4.0 / p) * x
+        };
+
+        Self::norm(r)
+      }
+    }
+  }
+
+  #[inline(always)]
+  pub fn oscillation_period(&self) -> f32 {
+    match self {
+      Self::Sine => Self::PERIOD_SINE,
+      Self::Triangle => Self::PERIOD_TRIANGLE,
+    }
+  }
+
+  fn norm(t: f32) -> f32 {
+    (t + 1.0) / 2.0
+  }
+}
 
 pub struct ShaderMaterial {
+  time_wave: TimeWave,
   current: usize,
   total: usize,
   history: Vec<(Ast, Material)>,
@@ -54,15 +97,28 @@ impl ShaderMaterial {
     let mut history = Vec::with_capacity(Self::MAX_HISTORY);
     history.push(top);
 
-    Self { current: 0, total: 1, history }
+    Self {
+      time_wave: TimeWave::Triangle,
+      current: 0,
+      total: 1,
+      history,
+    }
   }
 
   pub fn current_material(&self) -> &Material {
     &self.history[self.current].1
   }
 
+  #[inline]
   pub fn set_elapsed_time(&self, t: f32) {
-    self.current_material().set_uniform("elapsed", t);
+    self.current_material().set_uniform(
+      FRAGMENT_SHADER_TIME_VAR,
+      self.time_wave.calc(t),
+    );
+  }
+
+  pub fn time_wave(&self) -> &TimeWave {
+    &self.time_wave
   }
 
   pub fn next(&mut self, grammar: &Grammar, rng: &mut impl Rng, depth: isize) {
@@ -124,7 +180,7 @@ fn load_shader_material(grammar: &Grammar, rng: &mut impl Rng, depth: isize) -> 
     },
     MaterialParams {
       uniforms: vec![
-        UniformDesc::new("elapsed", UniformType::Float1),
+        UniformDesc::new(FRAGMENT_SHADER_TIME_VAR, UniformType::Float1),
       ],
       ..Default::default()
     },
