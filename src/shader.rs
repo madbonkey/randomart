@@ -89,12 +89,12 @@ impl ShaderMaterial {
 
   pub fn history_forward(&mut self) {
     if self.current == self.history.len() - 1 { return; }
-    self.current = self.current + 1;
+    self.current += 1;
   }
 
   pub fn history_backward(&mut self) {
     if self.current == 0 { return; }
-    self.current = self.current - 1;
+    self.current -= 1;
   }
 
   pub fn history_info(&self) -> (usize, usize, usize) {
@@ -154,8 +154,8 @@ fn compile_fragment_shader(ast: &Ast) -> String {
   let g = compile_fragment_shader_node_temp(g);
   let b = compile_fragment_shader_node_temp(b);
 
-  write!(&mut s, "gl_FragColor.r = {r};\n").expect("write red channel expression");
-  write!(&mut s, "gl_FragColor.g = {g};\n").expect("write green channel expression");
+  writeln!(&mut s, "gl_FragColor.r = {r};").expect("write red channel expression");
+  writeln!(&mut s, "gl_FragColor.g = {g};").expect("write green channel expression");
   write!(&mut s, "gl_FragColor.b = {b};").expect("write blue channel expression");
 
   s.push_str(fs_end);

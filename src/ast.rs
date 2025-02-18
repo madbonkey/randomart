@@ -162,7 +162,7 @@ impl Node {
             }
           }
           FnNode::Mix(x, y, a) => {
-            if let Some(yep) = optimize_ternary_fn(x, y, a, |x, y, a| mix_f32(x, y, a)) {
+            if let Some(yep) = optimize_ternary_fn(x, y, a, mix_f32) {
               replacement.replace(yep);
             }
           }

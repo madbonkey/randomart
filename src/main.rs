@@ -161,7 +161,7 @@ async fn command_gui_main(depth: u8, seed: u64) {
   use macroquad::prelude::*;
 
   const MAX_DEPTH: isize = 150;
-  const TAU: f32 = 6.283185307179586;
+  const TAU: f32 = 6.283_185_5;
 
   let mut depth = depth as isize;
 
