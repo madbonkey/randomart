@@ -4,8 +4,6 @@
 #[macro_use(info, error)]
 extern crate tracing;
 
-use std::io::Write;
-use std::process::Stdio;
 use std::time::SystemTime;
 
 use clap::{Parser, Subcommand};
@@ -15,11 +13,13 @@ use rayon::iter::ParallelIterator;
 
 use crate::ast::{Env, Eval};
 use crate::grammar::Grammar;
+use crate::recording::Ffmpeg;
 use crate::shader::ShaderMaterial;
 
 pub mod ast;
 pub mod grammar;
 pub mod shader;
+mod recording;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -179,7 +179,7 @@ async fn command_gui_main(depth: u8, seed: u64) {
 
   let mut show_hud = true;
   let mut paused = false;
-  let mut ffmpeg_recording: Option<Ffmpeg> = None;
+  let mut ffmpeg = Ffmpeg::default();
 
   let mut ffmpeg_frame_count = 0usize;
   let ffmpeg_target_frame_count = (TAU * 60.).ceil() as usize;
@@ -193,7 +193,7 @@ async fn command_gui_main(depth: u8, seed: u64) {
   loop {
     // time processing
     if !paused {
-      t += if ffmpeg_recording.is_some() { 1.0 / 60. } else { get_frame_time() };
+      t += if ffmpeg.is_recording() { 1.0 / 60. } else { get_frame_time() };
     }
 
     // input handling
@@ -225,22 +225,21 @@ async fn command_gui_main(depth: u8, seed: u64) {
         KeyCode::H => {
           show_hud = !show_hud;
         }
-        KeyCode::R if ffmpeg_recording.is_none() => {
+        KeyCode::R if !ffmpeg.is_recording() => {
           let (_, _, hn) = shader_material.history_info();
 
           tracing::info!("starting recording for seed {seed}, depth {depth}, history index {hn}");
 
-          let Ok(ffmpeg) = Ffmpeg::start_recording(seed, depth, hn) else {
+          if ffmpeg.start_recording(seed, depth, hn).is_err() {
             tracing::error!("failed to start ffmpeg recording");
             break;
           };
 
-          ffmpeg_recording.replace(ffmpeg);
           t = 0f32;
-        },
+        }
         KeyCode::D => {
           shader_material.debug_dump();
-        },
+        }
         KeyCode::S => {
           seed = rng.random_range(1000..99999);
           seed_text = format!("SEED  : {:0>4}", seed);
@@ -248,7 +247,7 @@ async fn command_gui_main(depth: u8, seed: u64) {
           rng = seeded_rng(seed);
           shader_material.reset(&grammar, &mut rng, depth);
           t = 0f32;
-        },
+        }
         _ => {}
       }
     }
@@ -269,23 +268,20 @@ async fn command_gui_main(depth: u8, seed: u64) {
     //   let mut gl = unsafe { get_internal_gl() };
     //   gl.flush();
     // }
-    if let Some(ffmpeg) = &mut ffmpeg_recording {
+    if ffmpeg.is_recording() {
       if ffmpeg_frame_count < ffmpeg_target_frame_count {
-        ffmpeg.write_image(get_screen_data());
+        ffmpeg.record_frame(get_screen_data());
         ffmpeg_frame_count += 1;
+      } else {
+        tracing::info!("recording target frame count reached ({ffmpeg_frame_count} / {ffmpeg_target_frame_count})");
+        ffmpeg.finish_recording();
+        ffmpeg_frame_count = 0;
       }
-    }
-
-    if ffmpeg_recording.is_some() && ffmpeg_frame_count >= ffmpeg_target_frame_count {
-      tracing::info!("recording target frame count reached ({ffmpeg_frame_count} / {ffmpeg_target_frame_count})");
-      let ffmpeg = unsafe { ffmpeg_recording.take().unwrap_unchecked() };
-      ffmpeg.finish_recording();
-      ffmpeg_frame_count = 0;
     }
 
     // HUD drawing
     if show_hud {
-      if ffmpeg_recording.is_none() {
+      if !ffmpeg.is_recording() {
         fps = get_smooth_fps(&mut fps, get_fps());
 
         draw_rectangle(4., 4., seed_text_bounds.width + 12., 116., Color::from_rgba(0, 0, 0, 190));
@@ -307,7 +303,7 @@ async fn command_gui_main(depth: u8, seed: u64) {
           screen_width() / 2.0 - (text_bounds.width / 2.0),
           screen_height() / 2.0 - (text_bounds.height / 2.0),
           40.,
-          color
+          color,
         );
 
         let recording_progress = (1f32 / ffmpeg_target_frame_count as f32) * ffmpeg_frame_count as f32;
@@ -358,64 +354,4 @@ fn seeded_rng(seed: u64) -> impl Rng {
   ])
 }
 
-struct Ffmpeg {
-  proc: std::process::Child,
-}
 
-impl Ffmpeg {
-  fn start_recording(seed: u64, depth: isize, hn: usize) -> Result<Self, std::io::Error> {
-    let output_path = format!("output/rec_{seed}_{depth}_{hn}.mp4");
-
-    let cmd = std::process::Command::new("ffmpeg")
-      // see https://github.com/tsoding/randomart/blob/main/src/ffmpeg_linux.c#L47
-      .args(&[
-        // global options
-        "-loglevel", "verbose",
-        "-y",
-
-        // input #1: piped raw video frames
-        "-f", "rawvideo",
-        "-pix_fmt", "rgba",
-        "-s", "1440x1440",
-        "-r", "60",
-        "-i", "-",
-
-        // output
-        "-vf", "vflip",
-        "-c:v", "libx264",
-        "-vb", "4500k",
-        "-pix_fmt", "yuv420p",
-      ])
-      .arg(output_path)
-      .stdin(Stdio::piped())
-      .stderr(Stdio::inherit())
-      .stdout(Stdio::inherit())
-      .spawn();
-
-    let proc = cmd?;
-
-    if !proc.stdin.is_some() {
-      return Err(std::io::Error::from(std::io::ErrorKind::BrokenPipe));
-    }
-
-    Ok(Self { proc })
-  }
-
-  fn write_image(&mut self, image: macroquad::texture::Image) {
-    let pipe = unsafe { self.proc.stdin.as_mut().unwrap_unchecked() };
-    if let Err(e) = pipe.write_all(image.bytes.as_slice()) {
-      tracing::error!("error writing frame: {e}");
-    }
-  }
-
-  fn finish_recording(self) {
-    match self.proc.wait_with_output() {
-      Ok(output) => {
-        tracing::info!("recording finished with exit status {:?}", output.status);
-      }
-      Err(e) => {
-        tracing::error!("error finishing recording: {e}");
-      }
-    }
-  }
-}
