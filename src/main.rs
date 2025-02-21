@@ -237,6 +237,12 @@ async fn command_gui_main(depth: u8, seed: u64) {
 
           t = 0f32;
         }
+        KeyCode::Escape if ffmpeg.is_recording() => {
+          ffmpeg.cancel_recording();
+
+          t = 0f32;
+          ffmpeg_frame_count = 0;
+        }
         KeyCode::D => {
           shader_material.debug_dump();
         }

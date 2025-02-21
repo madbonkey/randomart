@@ -51,6 +51,8 @@ impl Ffmpeg {
     let proc = cmd?;
 
     if proc.stdin.is_some() {
+      let pid = proc.id();
+      tracing::error!(pid = pid, "spawned recording child process");
       let _ = std::mem::replace(self, Self::Recording(proc));
       Ok(())
     } else {
@@ -76,9 +78,7 @@ impl Ffmpeg {
   }
 
   pub fn finish_recording(&mut self) {
-    if !matches!(self, Self::Recording(_)) {
-      return;
-    }
+    if !self.is_recording() { return; }
 
     match std::mem::replace(self, Self::Idle) {
       Self::Recording(proc) => {
@@ -96,7 +96,42 @@ impl Ffmpeg {
     }
   }
 
+  pub fn cancel_recording(&mut self) {
+    if !self.is_recording() { return; }
+
+    match std::mem::replace(self, Self::Idle) {
+      Self::Recording(mut proc) => {
+        let pid = proc.id();
+
+        if let Err(e) = interrupt_child(pid) {
+          tracing::error!("failed sending SIGINT to recording child process: {e}");
+        }
+
+        if let Err(e) = proc.kill() {
+          tracing::error!("error killing recording child process: {e}");
+          return;
+        }
+
+        tracing::info!(pid = pid, "killed recording child process");
+      },
+      _ => unreachable!(),
+    }
+
+  }
+
+  #[inline]
   pub fn is_recording(&self) -> bool {
     matches!(self, Self::Recording(_))
   }
+}
+
+fn interrupt_child(pid: u32) -> Result<(), Box<dyn std::error::Error>> {
+  let mut kill = std::process::Command::new("kill")
+    .args(["-s", "INT"])
+    .arg(pid.to_string())
+    .spawn()?;
+
+  kill.wait()?;
+
+  Ok(())
 }
