@@ -1,4 +1,5 @@
 use std::io::Write;
+use std::path::PathBuf;
 use std::process::{Child, Stdio};
 
 // pub struct Ffmpeg {
@@ -10,7 +11,10 @@ use std::process::{Child, Stdio};
 pub enum Ffmpeg {
   #[default]
   Idle,
-  Recording(Child),
+  Recording {
+    proc: Child,
+    path: PathBuf,
+  },
   Error(std::io::Error),
 }
 
@@ -41,8 +45,8 @@ impl Ffmpeg {
         "-c:v", "libx264",
         "-vb", "4500k",
         "-pix_fmt", "yuv420p",
+        output_path.as_str()
       ])
-      .arg(output_path)
       .stdin(Stdio::piped())
       .stderr(Stdio::inherit())
       .stdout(Stdio::inherit())
@@ -51,9 +55,11 @@ impl Ffmpeg {
     let proc = cmd?;
 
     if proc.stdin.is_some() {
+      let path = PathBuf::from(output_path);
       let pid = proc.id();
-      tracing::error!(pid = pid, "spawned recording child process");
-      let _ = std::mem::replace(self, Self::Recording(proc));
+
+      tracing::error!(pid = pid, path = ?path, "spawned recording child process");
+      let _ = std::mem::replace(self, Self::Recording { proc, path });
       Ok(())
     } else {
       let _ = std::mem::replace(self, Self::Error(std::io::Error::from(std::io::ErrorKind::BrokenPipe)));
@@ -63,14 +69,14 @@ impl Ffmpeg {
 
   pub fn record_frame(&mut self, image: macroquad::texture::Image) {
     match self {
-      Self::Recording(proc) => {
+      Self::Recording { proc, .. } => {
         // SAFETY: existence of proc.stdin verified on self variant creation
         let pipe = unsafe { proc.stdin.as_mut().unwrap_unchecked() };
 
         if let Err(e) = pipe.write_all(image.bytes.as_slice()) {
           tracing::error!("error writing frame: {e}");
         }
-      },
+      }
       _ => {
         tracing::error!("not in recording state");
       }
@@ -81,17 +87,16 @@ impl Ffmpeg {
     if !self.is_recording() { return; }
 
     match std::mem::replace(self, Self::Idle) {
-      Self::Recording(proc) => {
+      Self::Recording { proc, path } => {
         match proc.wait_with_output() {
           Ok(output) => {
-            tracing::info!("recording finished with exit status {:?}", output.status);
+            tracing::info!(path = ?path, exit_status = ?output.status, "recording finished");
           }
           Err(e) => {
             tracing::error!("error finishing recording: {e}");
           }
         }
-
-      },
+      }
       _ => unreachable!(),
     }
   }
@@ -100,28 +105,41 @@ impl Ffmpeg {
     if !self.is_recording() { return; }
 
     match std::mem::replace(self, Self::Idle) {
-      Self::Recording(mut proc) => {
+      Self::Recording { mut proc, path } => {
         let pid = proc.id();
 
         if let Err(e) = interrupt_child(pid) {
           tracing::error!("failed sending SIGINT to recording child process: {e}");
         }
 
-        if let Err(e) = proc.kill() {
-          tracing::error!("error killing recording child process: {e}");
-          return;
+        if let Err(e) = proc.wait() {
+          tracing::error!("error waiting for recording child process to quit: {e}");
+
+          if let Err(e) = proc.kill() {
+            tracing::error!("error killing recording child process: {e}");
+            return;
+          }
+
+          tracing::info!(pid = pid, "killed recording child process");
         }
 
-        tracing::info!(pid = pid, "killed recording child process");
-      },
+        tracing::info!(pid = pid, "recording child process stopped");
+
+        if path.exists() {
+          tracing::info!(path = ?path, "recording output still exists, removing ...");
+
+          if let Err(e) = std::fs::remove_file(&path) {
+            tracing::error!(path = ?path, "error removing recording output: {e}");
+          }
+        }
+      }
       _ => unreachable!(),
     }
-
   }
 
   #[inline]
   pub fn is_recording(&self) -> bool {
-    matches!(self, Self::Recording(_))
+    matches!(self, Self::Recording { .. })
   }
 }
 
