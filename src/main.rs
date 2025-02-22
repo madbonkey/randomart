@@ -3,11 +3,12 @@
 
 #[macro_use(info, error)]
 extern crate tracing;
+extern crate rand;
 
 use std::time::SystemTime;
 
 use clap::{Parser, Subcommand};
-use rand::{Rng, SeedableRng};
+use rand::{Rng, rng, SeedableRng};
 use rand::rngs::StdRng;
 use rayon::iter::ParallelIterator;
 
@@ -55,8 +56,8 @@ enum Command {
     depth: u8,
 
     /// Seed for the RNG
-    #[arg(long, default_value_t = 1337)]
-    seed: u64,
+    #[arg(long)]
+    seed: Option<u64>,
   },
 }
 
@@ -70,6 +71,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
       command_generate(depth, size, num_images, seed)?;
     }
     Command::Gui { depth, seed } => {
+      let seed = seed.unwrap_or_else(|| rng().random());
+
       command_gui(depth, seed)?;
     }
   }
