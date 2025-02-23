@@ -100,15 +100,9 @@ impl Eval for Node {
 
   fn eval(&self, env: &Env) -> Result<Self::Out, EvalError> {
     let val = match self {
-      Node::Var(inner) => {
-        NodeValue::Scalar(inner.eval(env)?)
-      }
-      Node::Scalar(inner) => {
-        NodeValue::Scalar(inner.eval(env)?)
-      }
-      Node::Fn(inner) => {
-        NodeValue::Scalar(inner.eval(env)?)
-      }
+      Node::Var(inner) => NodeValue::Scalar(inner.eval(env)?),
+      Node::Scalar(inner) => NodeValue::Scalar(inner.eval(env)?),
+      Node::Fn(inner) => NodeValue::Scalar(inner.eval(env)?),
       Node::Color(inner) => {
         let (r, g, b) = inner.eval(env)?;
         NodeValue::Color(r, g, b)
@@ -122,9 +116,7 @@ impl Eval for Node {
 impl Node {
   pub fn optimize(&mut self) -> bool {
     match self {
-      Self::Color(inner) => {
-        inner.optimize()
-      }
+      Self::Color(inner) => inner.optimize(),
       Self::Fn(inner) => {
         let io = inner.optimize();
 
@@ -185,7 +177,9 @@ impl Node {
 }
 
 fn optimize_unary_fn<F>(n: &BoxNode, f: F) -> Option<Node>
-  where F: FnOnce(f32) -> f32 {
+  where
+    F: FnOnce(f32) -> f32,
+{
   match n.as_ref() {
     Node::Scalar(n) => {
       let v = f(n.value);
@@ -196,21 +190,25 @@ fn optimize_unary_fn<F>(n: &BoxNode, f: F) -> Option<Node>
 }
 
 fn optimize_binary_fn<F>(l: &BoxNode, r: &BoxNode, f: F) -> Option<Node>
-  where F: FnOnce(f32, f32) -> f32 {
+  where
+    F: FnOnce(f32, f32) -> f32,
+{
   match l.as_ref() {
     Node::Scalar(l) => match r.as_ref() {
       Node::Scalar(r) => {
         let v = f(l.value, r.value);
         Some(Node::Scalar(ScalarNode::new(v)))
       }
-      _ => None
+      _ => None,
     },
     _ => None,
   }
 }
 
 fn optimize_ternary_fn<F>(x: &BoxNode, y: &BoxNode, z: &BoxNode, f: F) -> Option<Node>
-  where F: FnOnce(f32, f32, f32) -> f32 {
+  where
+    F: FnOnce(f32, f32, f32) -> f32,
+{
   match x.as_ref() {
     Node::Scalar(x) => match y.as_ref() {
       Node::Scalar(y) => match z.as_ref() {
@@ -220,26 +218,34 @@ fn optimize_ternary_fn<F>(x: &BoxNode, y: &BoxNode, z: &BoxNode, f: F) -> Option
         }
         _ => None,
       },
-      _ => None
+      _ => None,
     },
     _ => None,
   }
 }
 
 impl From<VarNode> for Node {
-  fn from(value: VarNode) -> Self { Self::Var(value) }
+  fn from(value: VarNode) -> Self {
+    Self::Var(value)
+  }
 }
 
 impl From<ScalarNode> for Node {
-  fn from(value: ScalarNode) -> Self { Self::Scalar(value) }
+  fn from(value: ScalarNode) -> Self {
+    Self::Scalar(value)
+  }
 }
 
 impl From<ColorNode> for Node {
-  fn from(value: ColorNode) -> Self { Self::Color(value) }
+  fn from(value: ColorNode) -> Self {
+    Self::Color(value)
+  }
 }
 
 impl From<FnNode> for Node {
-  fn from(value: FnNode) -> Self { Self::Fn(value) }
+  fn from(value: FnNode) -> Self {
+    Self::Fn(value)
+  }
 }
 
 impl Display for Node {
@@ -287,7 +293,9 @@ pub enum VarNode {
 }
 
 impl VarNode {
-  pub fn len(&self) -> usize { 1 }
+  pub fn len(&self) -> usize {
+    1
+  }
 }
 
 impl Eval for VarNode {
@@ -326,7 +334,9 @@ impl ScalarNode {
     self.value
   }
 
-  pub fn len(&self) -> usize { 1 }
+  pub fn len(&self) -> usize {
+    1
+  }
 }
 
 impl Eval for ScalarNode {
@@ -376,15 +386,21 @@ impl Eval for ColorNode {
 
   fn eval(&self, env: &Env) -> Result<Self::Out, EvalError> {
     let NodeValue::Scalar(r) = self.r.eval(env)? else {
-      return Err(EvalError::message("field `r` of color node must evaluate to a scalar value"));
+      return Err(EvalError::message(
+        "field `r` of color node must evaluate to a scalar value",
+      ));
     };
 
     let NodeValue::Scalar(g) = self.g.eval(env)? else {
-      return Err(EvalError::message("field `g` of color node must evaluate to a scalar value"));
+      return Err(EvalError::message(
+        "field `g` of color node must evaluate to a scalar value",
+      ));
     };
 
     let NodeValue::Scalar(b) = self.b.eval(env)? else {
-      return Err(EvalError::message("field `b` of color node must evaluate to a scalar value"));
+      return Err(EvalError::message(
+        "field `b` of color node must evaluate to a scalar value",
+      ));
     };
 
     Ok((r, g, b))
@@ -445,15 +461,9 @@ impl FnNode {
 
   pub fn optimize(&mut self) -> bool {
     match self {
-      Self::Sqrt(inner) => {
-        inner.optimize()
-      }
-      Self::Sin(inner) => {
-        inner.optimize()
-      }
-      Self::Cos(inner) => {
-        inner.optimize()
-      }
+      Self::Sqrt(inner) => inner.optimize(),
+      Self::Sin(inner) => inner.optimize(),
+      Self::Cos(inner) => inner.optimize(),
       Self::Add(l, r) => {
         let lo = l.optimize();
         let ro = r.optimize();
@@ -540,4 +550,3 @@ impl Display for FnNode {
     }
   }
 }
-

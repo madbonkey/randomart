@@ -1,15 +1,9 @@
-// #![allow(unused_imports)]
-// #![allow(dead_code)]
-
-#[macro_use(info, error)]
-extern crate tracing;
-extern crate rand;
-
 use std::time::SystemTime;
 
-use clap::{Parser, Subcommand};
 use rand::{Rng, rng, SeedableRng};
 use rand::rngs::StdRng;
+
+use clap::{Parser, Subcommand};
 use rayon::iter::ParallelIterator;
 
 use crate::ast::{Env, Eval};
@@ -19,8 +13,8 @@ use crate::shader::ShaderMaterial;
 
 pub mod ast;
 pub mod grammar;
+pub mod recording;
 pub mod shader;
-mod recording;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -67,7 +61,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   let cli: Cli = Cli::parse();
 
   match cli.command {
-    Command::Generate { depth, size, num_images, seed } => {
+    Command::Generate {
+      depth,
+      size,
+      num_images,
+      seed,
+    } => {
       command_generate(depth, size, num_images, seed)?;
     }
     Command::Gui { depth, seed } => {
@@ -82,11 +81,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 // ---
 
-fn command_generate(depth: u8, size: u16, num_images: u16, seed: u64) -> Result<(), Box<dyn std::error::Error>> {
-  info!("Generation seed: {}", seed);
-  info!("Generation depth: {}", depth);
-  info!("Image size: {}", size);
-  info!("Image count: {}", num_images);
+fn command_generate(
+  depth: u8,
+  size: u16,
+  num_images: u16,
+  seed: u64,
+) -> Result<(), Box<dyn std::error::Error>> {
+  tracing::info!("Generation seed: {}", seed);
+  tracing::info!("Generation depth: {}", depth);
+  tracing::info!("Image size: {}", size);
+  tracing::info!("Image count: {}", num_images);
 
   let mut rng = seeded_rng(seed);
   let grammar = Grammar::new_sample();
@@ -101,7 +105,7 @@ fn command_generate(depth: u8, size: u16, num_images: u16, seed: u64) -> Result<
     ast.optimize();
 
     let ast_hash = ast.sha256();
-    info!("ast hash: {ast_hash:?}");
+    tracing::info!("ast hash: {ast_hash:?}");
 
     let output = format!("output/ast_{ast_hash}.png");
 
@@ -118,7 +122,7 @@ fn command_generate(depth: u8, size: u16, num_images: u16, seed: u64) -> Result<
       let env = Env::new(x as f32 * scale, y as f32 * scale);
 
       let Ok((r, g, b)) = ast.eval(&env) else {
-        error!("ast did not evaluate to a triple!");
+        tracing::error!("ast did not evaluate to a triple!");
         return;
       };
 
@@ -133,12 +137,12 @@ fn command_generate(depth: u8, size: u16, num_images: u16, seed: u64) -> Result<
     });
 
     let dur = SystemTime::now().duration_since(start).unwrap_or_default();
-    info!("generation took {dur:?}");
+    tracing::info!("generation took {dur:?}");
 
     if let Err(e) = img.save(&output) {
-      error!("error saving image: {e}");
+      tracing::error!("error saving image: {e}");
     } else {
-      info!("saved image to {output}");
+      tracing::info!("saved image to {output}");
     }
   }
 
@@ -185,7 +189,8 @@ async fn command_gui_main(depth: u8, seed: u64) {
   let mut ffmpeg = Ffmpeg::default();
 
   let mut ffmpeg_frame_count = 0usize;
-  let ffmpeg_target_frame_count = (shader_material.time_wave().oscillation_period() * 60.).ceil() as usize;
+  let ffmpeg_target_frame_count =
+    (shader_material.time_wave().oscillation_period() * 60.).ceil() as usize;
 
   let mut t = 0f32;
   let mut fps = 60;
@@ -196,7 +201,11 @@ async fn command_gui_main(depth: u8, seed: u64) {
   loop {
     // time processing
     if !paused || ffmpeg.is_recording() {
-      t += if ffmpeg.is_recording() { 1.0 / 60. } else { get_frame_time() };
+      t += if ffmpeg.is_recording() {
+        1.0 / 60.
+      } else {
+        get_frame_time()
+      };
     }
 
     // input handling
@@ -218,11 +227,21 @@ async fn command_gui_main(depth: u8, seed: u64) {
           paused = !paused;
         }
         KeyCode::RightBracket if depth < MAX_DEPTH => {
-          let next_depth = depth + if is_key_down(KeyCode::LeftShift) { 10 } else { 1 };
+          let next_depth = depth
+            + if is_key_down(KeyCode::LeftShift) {
+            10
+          } else {
+            1
+          };
           depth = next_depth.clamp(MIN_DEPTH, MAX_DEPTH);
         }
         KeyCode::Slash if depth > MIN_DEPTH => {
-          let next_depth = depth - if is_key_down(KeyCode::LeftShift) { 10 } else { 1 };
+          let next_depth = depth
+            - if is_key_down(KeyCode::LeftShift) {
+            10
+          } else {
+            1
+          };
           depth = next_depth.clamp(MIN_DEPTH, MAX_DEPTH);
         }
         KeyCode::H => {
@@ -282,7 +301,9 @@ async fn command_gui_main(depth: u8, seed: u64) {
         ffmpeg.record_frame(get_screen_data());
         ffmpeg_frame_count += 1;
       } else {
-        tracing::info!("recording target frame count reached ({ffmpeg_frame_count} / {ffmpeg_target_frame_count})");
+        tracing::info!(
+          "recording target frame count reached ({ffmpeg_frame_count} / {ffmpeg_target_frame_count})"
+        );
         ffmpeg.finish_recording();
         ffmpeg_frame_count = 0;
       }
@@ -293,15 +314,39 @@ async fn command_gui_main(depth: u8, seed: u64) {
       if !ffmpeg.is_recording() {
         fps = get_smooth_fps(&mut fps, get_fps());
 
-        draw_rectangle(4., 4., seed_text_bounds.width + 12., 116., Color::from_rgba(0, 0, 0, 190));
+        draw_rectangle(
+          4.,
+          4.,
+          seed_text_bounds.width + 12.,
+          116.,
+          Color::from_rgba(0, 0, 0, 190),
+        );
 
         draw_text(seed_text.as_str(), 10., 26., 24., WHITE);
         let (_, _, ht) = shader_material.history_info();
         let t_display = shader_material.time_wave().calc(t);
         draw_text(format!("HIST  : {ht}").as_str(), 10., 46., 24., WHITE);
-        draw_text(format!("TIME  : {:.2}", t_display).as_str(), 10., 66., 24., WHITE);
-        draw_text(format!("DEPTH : {:0>4}", depth).as_str(), 10., 86., 24., WHITE);
-        draw_text(format!("FPS   : {:0>4}", fps).as_str(), 10., 106., 24., WHITE);
+        draw_text(
+          format!("TIME  : {:.2}", t_display).as_str(),
+          10.,
+          66.,
+          24.,
+          WHITE,
+        );
+        draw_text(
+          format!("DEPTH : {:0>4}", depth).as_str(),
+          10.,
+          86.,
+          24.,
+          WHITE,
+        );
+        draw_text(
+          format!("FPS   : {:0>4}", fps).as_str(),
+          10.,
+          106.,
+          24.,
+          WHITE,
+        );
       } else {
         let color = RED;
 
@@ -316,7 +361,8 @@ async fn command_gui_main(depth: u8, seed: u64) {
           color,
         );
 
-        let recording_progress = (1f32 / ffmpeg_target_frame_count as f32) * ffmpeg_frame_count as f32;
+        let recording_progress =
+          (1f32 / ffmpeg_target_frame_count as f32) * ffmpeg_frame_count as f32;
         draw_rectangle_lines(
           screen_width() / 2.0 - (text_bounds.width / 2.0),
           screen_height() / 2.0 + (text_bounds.height / 2.0) + 8.,
@@ -356,12 +402,7 @@ fn seeded_rng(seed: u64) -> impl Rng {
   let seed: [u8; 8] = seed.to_be_bytes();
 
   StdRng::from_seed([
-    0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0,
-    seed[0], seed[1], seed[2], seed[3],
-    seed[4], seed[5], seed[6], seed[7],
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, seed[0], seed[1],
+    seed[2], seed[3], seed[4], seed[5], seed[6], seed[7],
   ])
 }
-
-

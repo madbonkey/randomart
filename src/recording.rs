@@ -19,7 +19,12 @@ pub enum Ffmpeg {
 }
 
 impl Ffmpeg {
-  pub fn start_recording(&mut self, seed: u64, depth: isize, hn: usize) -> Result<(), std::io::Error> {
+  pub fn start_recording(
+    &mut self,
+    seed: u64,
+    depth: isize,
+    hn: usize,
+  ) -> Result<(), std::io::Error> {
     if !matches!(self, Self::Idle) {
       return Err(std::io::Error::from(std::io::ErrorKind::BrokenPipe));
     }
@@ -30,22 +35,30 @@ impl Ffmpeg {
       // see https://github.com/tsoding/randomart/blob/main/src/ffmpeg_linux.c#L47
       .args([
         // global options
-        "-loglevel", "verbose",
+        "-loglevel",
+        "verbose",
         "-y",
-
         // input #1: piped raw video frames
-        "-f", "rawvideo",
-        "-pix_fmt", "rgba",
-        "-s", "1440x1440",
-        "-r", "60",
-        "-i", "-",
-
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgba",
+        "-s",
+        "1440x1440",
+        "-r",
+        "60",
+        "-i",
+        "-",
         // output
-        "-vf", "vflip",
-        "-c:v", "libx264",
-        "-vb", "4500k",
-        "-pix_fmt", "yuv420p",
-        output_path.as_str()
+        "-vf",
+        "vflip",
+        "-c:v",
+        "libx264",
+        "-vb",
+        "4500k",
+        "-pix_fmt",
+        "yuv420p",
+        output_path.as_str(),
       ])
       .stdin(Stdio::piped())
       .stderr(Stdio::inherit())
@@ -62,7 +75,10 @@ impl Ffmpeg {
       let _ = std::mem::replace(self, Self::Recording { proc, path });
       Ok(())
     } else {
-      let _ = std::mem::replace(self, Self::Error(std::io::Error::from(std::io::ErrorKind::BrokenPipe)));
+      let _ = std::mem::replace(
+        self,
+        Self::Error(std::io::Error::from(std::io::ErrorKind::BrokenPipe)),
+      );
       Err(std::io::Error::from(std::io::ErrorKind::BrokenPipe))
     }
   }
@@ -84,25 +100,27 @@ impl Ffmpeg {
   }
 
   pub fn finish_recording(&mut self) {
-    if !self.is_recording() { return; }
+    if !self.is_recording() {
+      return;
+    }
 
     match std::mem::replace(self, Self::Idle) {
-      Self::Recording { proc, path } => {
-        match proc.wait_with_output() {
-          Ok(output) => {
-            tracing::info!(path = ?path, exit_status = ?output.status, "recording finished");
-          }
-          Err(e) => {
-            tracing::error!("error finishing recording: {e}");
-          }
+      Self::Recording { proc, path } => match proc.wait_with_output() {
+        Ok(output) => {
+          tracing::info!(path = ?path, exit_status = ?output.status, "recording finished");
         }
-      }
+        Err(e) => {
+          tracing::error!("error finishing recording: {e}");
+        }
+      },
       _ => unreachable!(),
     }
   }
 
   pub fn cancel_recording(&mut self) {
-    if !self.is_recording() { return; }
+    if !self.is_recording() {
+      return;
+    }
 
     match std::mem::replace(self, Self::Idle) {
       Self::Recording { mut proc, path } => {

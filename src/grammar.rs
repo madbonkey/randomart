@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter, Write};
+
 use rand::Rng;
 use rand::seq::IteratorRandom;
 
@@ -27,16 +28,14 @@ impl Grammar {
       rules: vec![
         Rule {
           id: 'E',
-          branches: vec![
-            Branch {
-              weight: 1,
-              kind: BranchKind::Color(ColorBranch {
-                r: Box::new(BranchKind::Rule('C')),
-                g: Box::new(BranchKind::Rule('C')),
-                b: Box::new(BranchKind::Rule('C')),
-              }),
-            }
-          ],
+          branches: vec![Branch {
+            weight: 1,
+            kind: BranchKind::Color(ColorBranch {
+              r: Box::new(BranchKind::Rule('C')),
+              g: Box::new(BranchKind::Rule('C')),
+              b: Box::new(BranchKind::Rule('C')),
+            }),
+          }],
         },
         Rule {
           id: 'C',
@@ -61,15 +60,11 @@ impl Grammar {
             },
             Branch {
               weight: 3,
-              kind: BranchKind::Fn(FnBranch::Sqrt(
-                Box::new(BranchKind::Rule('C')),
-              )),
+              kind: BranchKind::Fn(FnBranch::Sqrt(Box::new(BranchKind::Rule('C')))),
             },
             Branch {
               weight: 3,
-              kind: BranchKind::Fn(FnBranch::Sin(
-                Box::new(BranchKind::Rule('C')),
-              )),
+              kind: BranchKind::Fn(FnBranch::Sin(Box::new(BranchKind::Rule('C')))),
             },
             Branch {
               weight: 1,
@@ -109,7 +104,7 @@ impl Grammar {
             },
           ],
         },
-      ]
+      ],
     }
   }
 
@@ -117,18 +112,21 @@ impl Grammar {
     let node = self.generate_node(rng, 'E', depth)?;
 
     match node {
-      Node::Color(color) => {
-        Ok(Ast::new(color))
-      }
-      _ => {
-        Err(GenError::Unknown)
-      }
+      Node::Color(color) => Ok(Ast::new(color)),
+      _ => Err(GenError::Unknown),
     }
   }
 
-  fn generate_node(&self, rng: &mut impl Rng, initial_rule: RuleId, depth: isize) -> Result<Node, GenError> {
+  fn generate_node(
+    &self,
+    rng: &mut impl Rng,
+    initial_rule: RuleId,
+    depth: isize,
+  ) -> Result<Node, GenError> {
     // (1)
-    let root = self.find_rule(initial_rule).ok_or(GenError::RuleNotFound(initial_rule))?;
+    let root = self
+      .find_rule(initial_rule)
+      .ok_or(GenError::RuleNotFound(initial_rule))?;
 
     // (2)
     if depth <= 0 {
@@ -219,10 +217,7 @@ impl Rule {
   }
 
   fn weight_sum(&self) -> usize {
-    self.branches
-        .iter()
-        .map(|b| b.weight as usize)
-        .sum()
+    self.branches.iter().map(|b| b.weight as usize).sum()
   }
 }
 
@@ -276,28 +271,31 @@ impl Display for BranchKind {
         f.write_char('<')?;
         f.write_char(*rule)?;
         f.write_char('>')?;
-      },
+      }
       Self::Var(var) => {
         f.write_char('@')?;
         f.write_char(*var)?;
-      },
+      }
       Self::Fn(fb) => {
         Display::fmt(fb, f)?;
-      },
+      }
       Self::Color(cb) => {
         Display::fmt(cb, f)?;
-      },
+      }
     }
     Ok(())
   }
 }
 
 impl BranchKind {
-  fn generate_node(&self, rng: &mut impl Rng, grammar: &Grammar, depth: isize) -> Result<Node, GenError> {
+  fn generate_node(
+    &self,
+    rng: &mut impl Rng,
+    grammar: &Grammar,
+    depth: isize,
+  ) -> Result<Node, GenError> {
     match self {
-      BranchKind::Rule(rid) => {
-        grammar.generate_node(rng, *rid, depth - 1)
-      }
+      BranchKind::Rule(rid) => grammar.generate_node(rng, *rid, depth - 1),
       BranchKind::Var(v) => {
         let v = match v {
           'x' => VarNode::X,
@@ -307,47 +305,45 @@ impl BranchKind {
         };
         Ok(Node::from(v))
       }
-      BranchKind::Fn(f) => {
-        match f {
-          FnBranch::Random => {
-            let v = rng.random::<f32>();
-            Ok(Node::from(ScalarNode::new(v)))
-          }
-          FnBranch::Sqrt(b) => {
-            let b = b.generate_node(rng, grammar, depth - 1)?;
-            Ok(Node::from(FnNode::sqrt(b)))
-          }
-          FnBranch::Sin(b) => {
-            let b = b.generate_node(rng, grammar, depth - 1)?;
-            Ok(Node::from(FnNode::sin(b)))
-          }
-          FnBranch::Cos(b) => {
-            let b = b.generate_node(rng, grammar, depth - 1)?;
-            Ok(Node::from(FnNode::cos(b)))
-          }
-          FnBranch::Add(l, r) => {
-            let l = l.generate_node(rng, grammar, depth - 1)?;
-            let r = r.generate_node(rng, grammar, depth - 1)?;
-            Ok(Node::from(FnNode::add(l, r)))
-          }
-          FnBranch::Mul(l, r) => {
-            let l = l.generate_node(rng, grammar, depth - 1)?;
-            let r = r.generate_node(rng, grammar, depth - 1)?;
-            Ok(Node::from(FnNode::mul(l, r)))
-          }
-          FnBranch::Mod(l, r) => {
-            let l = l.generate_node(rng, grammar, depth - 1)?;
-            let r = r.generate_node(rng, grammar, depth - 1)?;
-            Ok(Node::from(FnNode::modulo(l, r)))
-          },
-          FnBranch::Mix(x, y, a) => {
-            let x = x.generate_node(rng, grammar, depth - 1)?;
-            let y = y.generate_node(rng, grammar, depth - 1)?;
-            let a = a.generate_node(rng, grammar, depth - 1)?;
-            Ok(Node::from(FnNode::mix(x, y, a)))
-          },
+      BranchKind::Fn(f) => match f {
+        FnBranch::Random => {
+          let v = rng.random::<f32>();
+          Ok(Node::from(ScalarNode::new(v)))
         }
-      }
+        FnBranch::Sqrt(b) => {
+          let b = b.generate_node(rng, grammar, depth - 1)?;
+          Ok(Node::from(FnNode::sqrt(b)))
+        }
+        FnBranch::Sin(b) => {
+          let b = b.generate_node(rng, grammar, depth - 1)?;
+          Ok(Node::from(FnNode::sin(b)))
+        }
+        FnBranch::Cos(b) => {
+          let b = b.generate_node(rng, grammar, depth - 1)?;
+          Ok(Node::from(FnNode::cos(b)))
+        }
+        FnBranch::Add(l, r) => {
+          let l = l.generate_node(rng, grammar, depth - 1)?;
+          let r = r.generate_node(rng, grammar, depth - 1)?;
+          Ok(Node::from(FnNode::add(l, r)))
+        }
+        FnBranch::Mul(l, r) => {
+          let l = l.generate_node(rng, grammar, depth - 1)?;
+          let r = r.generate_node(rng, grammar, depth - 1)?;
+          Ok(Node::from(FnNode::mul(l, r)))
+        }
+        FnBranch::Mod(l, r) => {
+          let l = l.generate_node(rng, grammar, depth - 1)?;
+          let r = r.generate_node(rng, grammar, depth - 1)?;
+          Ok(Node::from(FnNode::modulo(l, r)))
+        }
+        FnBranch::Mix(x, y, a) => {
+          let x = x.generate_node(rng, grammar, depth - 1)?;
+          let y = y.generate_node(rng, grammar, depth - 1)?;
+          let a = a.generate_node(rng, grammar, depth - 1)?;
+          Ok(Node::from(FnNode::mix(x, y, a)))
+        }
+      },
       BranchKind::Color(c) => {
         let r = c.r.generate_node(rng, grammar, depth - 1)?;
         let g = c.r.generate_node(rng, grammar, depth - 1)?;
@@ -403,38 +399,38 @@ impl Display for FnBranch {
         f.write_str("sqrt(")?;
         Display::fmt(inner, f)?;
         f.write_char(')')?;
-      },
+      }
       Self::Sin(inner) => {
         f.write_str("sin(")?;
         Display::fmt(inner, f)?;
         f.write_char(')')?;
-      },
+      }
       Self::Cos(inner) => {
         f.write_str("cos(")?;
         Display::fmt(inner, f)?;
         f.write_char(')')?;
-      },
+      }
       Self::Add(l, r) => {
         f.write_str("add(")?;
         Display::fmt(l, f)?;
         f.write_str(", ")?;
         Display::fmt(r, f)?;
         f.write_char(')')?;
-      },
+      }
       Self::Mul(l, r) => {
         f.write_str("mul(")?;
         Display::fmt(l, f)?;
         f.write_str(", ")?;
         Display::fmt(r, f)?;
         f.write_char(')')?;
-      },
+      }
       Self::Mod(l, r) => {
         f.write_str("mod(")?;
         Display::fmt(l, f)?;
         f.write_str(", ")?;
         Display::fmt(r, f)?;
         f.write_char(')')?;
-      },
+      }
       Self::Mix(x, y, a) => {
         f.write_str("mix(")?;
         Display::fmt(x, f)?;
@@ -443,7 +439,7 @@ impl Display for FnBranch {
         f.write_str(", ")?;
         Display::fmt(a, f)?;
         f.write_char(')')?;
-      },
+      }
     }
     Ok(())
   }
