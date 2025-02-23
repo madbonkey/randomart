@@ -299,7 +299,12 @@ impl Display for BranchKind {
 }
 
 impl BranchKind {
-  fn generate_node(&self, rng: &mut impl Rng, grammar: &Grammar, depth: isize) -> Result<Node, GenError> {
+  fn generate_node(
+    &self,
+    rng: &mut impl Rng,
+    grammar: &Grammar,
+    depth: isize,
+  ) -> Result<Node, GenError> {
     match self {
       BranchKind::Rule(rid) => {
         grammar.generate_node(rng, rid, depth - 1)
@@ -484,9 +489,7 @@ fn try_fn_call_from_str(input: &str) -> Result<FnBranch, ParseError> {
 
   if input == "rand()" {
     return Ok(FnBranch::Random);
-  } else if input.starts_with("sin") {
-
-  }
+  } else if input.starts_with("sin") {}
 
   todo!()
 }

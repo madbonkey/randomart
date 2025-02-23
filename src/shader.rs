@@ -1,13 +1,15 @@
 use std::fmt::Write;
 
+use rand::Rng;
+
 use macroquad::material::{load_material, Material, MaterialParams};
 use macroquad::miniquad::{ShaderSource, UniformDesc, UniformType};
-use rand::Rng;
 
 use crate::ast::{Ast, FnNode, Node, VarNode};
 use crate::grammar::Grammar;
 
-const DEFAULT_VERTEX_SHADER: &str = /*language=glsl*/ "#version 100
+const DEFAULT_VERTEX_SHADER: &str = /*language=glsl*/
+  "#version 100
   precision mediump float;
   attribute vec3 position;
   attribute vec2 texcoord;
@@ -23,7 +25,8 @@ const DEFAULT_VERTEX_SHADER: &str = /*language=glsl*/ "#version 100
   }
 ";
 
-const FRAGMENT_SHADER_TEMPLATE: &str = /*language=glsl*/ "#version 100
+const FRAGMENT_SHADER_TEMPLATE: &str = /*language=glsl*/
+  "#version 100
   precision mediump float;
 
   uniform float t;
@@ -111,10 +114,9 @@ impl ShaderMaterial {
 
   #[inline]
   pub fn set_elapsed_time(&self, t: f32) {
-    self.current_material().set_uniform(
-      FRAGMENT_SHADER_TIME_VAR,
-      self.time_wave.calc(t),
-    );
+    self
+      .current_material()
+      .set_uniform(FRAGMENT_SHADER_TIME_VAR, self.time_wave.calc(t));
   }
 
   pub fn time_wave(&self) -> &TimeWave {
@@ -144,12 +146,16 @@ impl ShaderMaterial {
   }
 
   pub fn history_forward(&mut self) {
-    if self.current == self.history.len() - 1 { return; }
+    if self.current == self.history.len() - 1 {
+      return;
+    }
     self.current += 1;
   }
 
   pub fn history_backward(&mut self) {
-    if self.current == 0 { return; }
+    if self.current == 0 {
+      return;
+    }
     self.current -= 1;
   }
 
@@ -179,9 +185,10 @@ fn load_shader_material(grammar: &Grammar, rng: &mut impl Rng, depth: isize) -> 
       fragment: &fragment_shader,
     },
     MaterialParams {
-      uniforms: vec![
-        UniformDesc::new(FRAGMENT_SHADER_TIME_VAR, UniformType::Float1),
-      ],
+      uniforms: vec![UniformDesc::new(
+        FRAGMENT_SHADER_TIME_VAR,
+        UniformType::Float1,
+      )],
       ..Default::default()
     },
   );
@@ -191,7 +198,7 @@ fn load_shader_material(grammar: &Grammar, rng: &mut impl Rng, depth: isize) -> 
     Err(e) => {
       tracing::error!("{e}\n{fragment_shader}");
       panic!("Shader compilation failed");
-    },
+    }
   }
 }
 
@@ -294,7 +301,7 @@ fn compile_fragment_shader_node_fn(node: &FnNode, out: &mut String) {
       out.push(',');
       compile_fragment_shader_node(r, out);
       out.push(')');
-    },
+    }
     FnNode::Mix(x, y, a) => {
       out.push_str("mix(");
       compile_fragment_shader_node(x, out);
@@ -306,4 +313,3 @@ fn compile_fragment_shader_node_fn(node: &FnNode, out: &mut String) {
     }
   }
 }
-
