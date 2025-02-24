@@ -1,7 +1,7 @@
 [package]
 name = "randomart"
 version = "0.0.0"
-edition = "2024"
+edition = "2018"
 
 [profile.release]
 lto = "fat"
@@ -18,8 +18,9 @@ opt-level = 3
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
-image = "0.25"
+image = { version = "0.25", default-features = false, features = ["png", "rayon"] }
 macroquad = "0.4"
+nom = "8.0"
 rand = "0.9"
 rayon = "1.10"
 sha256 = "1.5"
