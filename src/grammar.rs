@@ -578,24 +578,24 @@ pub mod parse {
   pub type ParseRes<'i, O> = nom::IResult<ParseIn<'i>, O, ParseError>;
 
   macro_rules! ws_char {
-  ($chr:expr) => {
-    delimited(
-      multispace0(),
-      nom::character::char($chr),
-      multispace0(),
-    )
-  };
-}
+    ($chr:expr) => {
+      delimited(
+        multispace0(),
+        nom::character::char($chr),
+        multispace0(),
+      )
+    };
+  }
 
   macro_rules! ws_tag {
-  ($tag:expr) => {
-    delimited(
-      multispace0(),
-      nom::bytes::tag($tag),
-      multispace0(),
-    )
-  };
-}
+    ($tag:expr) => {
+      delimited(
+        multispace0(),
+        nom::bytes::tag($tag),
+        multispace0(),
+      )
+    };
+  }
 
   fn parse_rule_id<'i>() -> impl Parser<ParseIn<'i>, Output=RuleId, Error=ParseError> {
     delimited(multispace0(), alpha1, multispace0())
