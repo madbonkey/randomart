@@ -172,7 +172,12 @@ impl ShaderMaterial {
     // - use Display impl of ast as content for "<hash>.ast"
     // - use fragment shader as content for "<hash>.frag"
     // - implement some serialization/display for grammar and output
-    tracing::warn!("debug_dump() is not implemented yet");
+
+    let Some((ast, _)) = self.history.get(self.current) else {
+      return;
+    };
+
+    tracing::info!(hash = ast.sha256(), "debug-ast:\n{ast}");
   }
 }
 
