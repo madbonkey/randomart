@@ -28,35 +28,6 @@ Options:
   -V, --version  Print version
 ```
 
-Currently, the grammar for generating the image/shader function is hard-coded. In pseudo-BNF it is:
-
-```
-E :=
-  | color(<C>, <C>, <C>)
-
-C :=
-  | 2:<A>
-  | 4:add(<C>, <C>)
-  | 4:mul(<C>, <C>)
-  | 3:sqrt(<C>)
-  | 3:sin(<C>)
-  | mix(<C>, <C>, <A>)
-  | mod(<C>, <A>)
-
-A :=
-  | 2:rand()
-  | 3:@x
-  | 3:@y
-  | @t
-```
-
-Where
-
-* `E` is the entry point rule
-* `2:`, `3:`, etc. denote weight multipliers
-* `<X>` refers to another rule
-* `@x`, `@y` and `@t` are variables
-
 ### Commands
 
 #### `generate`
@@ -67,6 +38,7 @@ Generate random art images and save to disk
 $ randomart generate [OPTIONS]
 
 Options:
+  -g, --grammar <GRAMMAR>        The .grammar file to use for generation
   -d, --depth <DEPTH>            Depth guide value of the function generation [default: 55]
   -s, --size <SIZE>              Size (width and height) of the generated image(s) [default: 1024]
   -n, --num-images <NUM_IMAGES>  Number of images to generate [default: 10]
@@ -82,10 +54,40 @@ Launch random art GUI to play around with
 $ randomart gui [OPTIONS]
 
 Options:
-  -d, --depth <DEPTH>  Depth guide value of the function generation [default: 55]
-      --seed <SEED>    Seed for the RNG [default: 1337]
-  -h, --help           Print help
+  -g, --grammar <GRAMMAR>  The .grammar file to use for generation
+  -d, --depth <DEPTH>      Depth guide value of the function generation [default: 55]
+      --seed <SEED>        Seed for the RNG
+  -h, --help               Print help
 ```
+
+### `.grammar` File Format
+
+* Grammar files are lists of "rules"
+* Rules start with an alphabetic rule ID, followed by `:=`, and one or more "branches", then terminate with `;`
+* Branches start with a `|`, followed by
+  * a color definition: `color(R, G, B)`, where `R/G/B` can be another expression
+  * a rule reference: `<ID>`, where "ID" is a rule ID in the grammar
+  * a variable:
+    * `@x`: the X coordinate of the rendered pixel (in 0..1) 
+    * `@y`: the Y coordinate of the rendered pixel (in 0..1)
+    * `@t`: the time value of the rendering/recording (oscillates in 0..1)
+  * a constant float: `const(1.0)`
+  * a function call: see below for available functions 
+* **IMPORTANT**: Grammars need to have exactly one rule which contains only `color(..)` branches. This rule will be used as the entrypoint for generating an AST. If there are more than one rule for which this applies, one is chosen randomly, but there can be errors if other rules with `color(..)` are reachable – this is an open to-do!
+* For examples, see the [grammar/](./grammar) directory
+ 
+#### Available functions
+   
+| name    | args | example                     |                                     |
+|---------|:----:|-----------------------------|-------------------------------------|
+| sin/cos |  1   | `sin(rand())`               | sine / cosine                       |
+| sqrt    |  1   | `sqrt(@x)`                  | square root                         |
+| add     |  2   | `add(@x, <C>)`              | addition                            |
+| mul     |  2   | `mul(@y, const(0.5)`        | multiplication                      |
+| mod     |  2   | `mod(@t, 0.1)`              | modulo                              |
+| mix     |  3   | `mix(sqrt(@x), @x, rand())` | the usual mix function<sup>1)</sup> |
+
+<small><sup>1)</sup> see [thebookofshaders.com](https://thebookofshaders.com/glossary/?search=mix)</small>
 
 ### GUI mode keybindings
 
@@ -101,3 +103,4 @@ Options:
 | `S`           | Re-seed and reset                      |
 | `R`           | Start recording a ~6 second video clip |
 | `D`           | Dump debug information to stdout       |
+| `ESC`         | (while recording) Cancel recording     |
