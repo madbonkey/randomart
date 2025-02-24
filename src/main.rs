@@ -110,7 +110,7 @@ fn command_generate(
     Err(e) => {
       tracing::error!("Failed loading grammar from path {grammar_path:?}: {e}");
       std::process::exit(1);
-    },
+    }
   };
 
   let size = size as u32;
@@ -175,12 +175,40 @@ fn command_gui(grammar_path: PathBuf, depth: u8, seed: u64) -> Result<(), Box<dy
     window_height: 720,
     high_dpi: true,
     window_resizable: true,
+    icon: command_gui_window_icon(),
     ..Default::default()
   };
 
   macroquad::Window::from_config(conf, command_gui_main(grammar_path, depth, seed));
 
   Ok(())
+}
+
+macro_rules! icon_data {
+  ($data:expr; $size:expr) => {{
+    let mut bytes = [0u8; 4 * $size * $size];
+    let image = image::load_from_memory($data).ok()?.to_rgba8();
+    let mut i = 0usize;
+    for p in image.pixels() {
+      for j in 0..4 {
+        bytes[(i * 4) + j] = p.0[j];
+      }
+      i += 1;
+    }
+    bytes
+  }}
+}
+
+fn command_gui_window_icon() -> Option<macroquad::miniquad::conf::Icon> {
+  const ICON_16: &[u8] = include_bytes!("../icon/icon_16.png");
+  const ICON_32: &[u8] = include_bytes!("../icon/icon_32.png");
+  const ICON_64: &[u8] = include_bytes!("../icon/icon_64.png");
+
+  Some(macroquad::miniquad::conf::Icon {
+    small:  icon_data![ICON_16; 16],
+    medium: icon_data![ICON_32; 32],
+    big:    icon_data![ICON_64; 64],
+  })
 }
 
 async fn command_gui_main(grammar_path: PathBuf, depth: u8, seed: u64) {
@@ -202,7 +230,7 @@ async fn command_gui_main(grammar_path: PathBuf, depth: u8, seed: u64) {
     Err(e) => {
       tracing::error!("Failed loading grammar from path {grammar_path:?}: {e}");
       std::process::exit(1);
-    },
+    }
   };
 
   tracing::debug!("Generator grammar:\n{grammar}");

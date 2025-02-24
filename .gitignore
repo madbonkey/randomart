@@ -2,4 +2,7 @@
 /target
 /output
 
+/icon/*.psd
+/icon/*.sketch
+
 .DS_Store
