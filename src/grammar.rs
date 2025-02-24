@@ -506,21 +506,24 @@ pub type ParseIn<'i> = &'i str;
 
 pub type ParseRes<'i, O> = nom::IResult<ParseIn<'i>, O, ParseError>;
 
-
-fn parse_ws_char<'i>(punc: char) -> impl Parser<ParseIn<'i>, Output=char, Error=ParseError> {
-  delimited(
-    multispace0(),
-    nom::character::char(punc),
-    multispace0(),
-  )
+macro_rules! ws_char {
+  ($chr:expr) => {
+    delimited(
+      multispace0(),
+      nom::character::char($chr),
+      multispace0(),
+    )
+  };
 }
 
-fn parse_ws_tag<'i, 't>(tag: &'t str) -> impl Parser<ParseIn<'i>, Output=&'i str, Error=ParseError> + use < 'i, 't > {
-delimited(
-multispace0(),
-nom::bytes::tag(tag),
-multispace0(),
-)
+macro_rules! ws_tag {
+  ($tag:expr) => {
+    delimited(
+      multispace0(),
+      nom::bytes::tag($tag),
+      multispace0(),
+    )
+  };
 }
 
 fn parse_rule_id<'i>() -> impl Parser<ParseIn<'i>, Output=RuleId, Error=ParseError> {
@@ -530,9 +533,9 @@ fn parse_rule_id<'i>() -> impl Parser<ParseIn<'i>, Output=RuleId, Error=ParseErr
 
 fn parse_rule_id_ref<'i>() -> impl Parser<ParseIn<'i>, Output=RuleId, Error=ParseError> {
   delimited(
-    parse_ws_char('<'),
+    ws_char!('<'),
     parse_rule_id(),
-    parse_ws_char('>'),
+    ws_char!('>'),
   )
 }
 
@@ -542,8 +545,7 @@ fn parse_bk_rule_id_ref<'i>() -> impl Parser<ParseIn<'i>, Output=BranchKind, Err
 
 fn parse_var_id<'i>() -> impl Parser<ParseIn<'i>, Output=VarId, Error=ParseError> {
   preceded(
-    parse_ws_char('@'),
-    // take_while1(char::is_alphabetic).map(|var_id: ParseIn<'i>| var_id.to_string()),
+    ws_char!('@'),
     alpha1.map(|var_id: ParseIn<'i>| var_id.to_string()),
   )
 }
@@ -562,39 +564,37 @@ fn ensure_args_len(args: &Vec<BranchKind>, n: usize) -> Result<(), ParseError> {
 
 fn parse_bk_arglist<'i>() -> impl Parser<ParseIn<'i>, Output=Vec<BranchKind>, Error=ParseError> {
   delimited(
-    parse_ws_char('('),
-    separated_list0(parse_ws_char(','), parse_branch_kind),
-    parse_ws_char(')'),
+    ws_char!('('),
+    separated_list0(ws_char!(','), parse_branch_kind),
+    ws_char!(')'),
   )
 }
 
-fn parse_color(input: ParseIn) -> ParseRes<ColorBranch> {
-  let (rest, args) = preceded(
-    parse_ws_tag("color"),
+fn parse_color<'i>() -> impl Parser<ParseIn<'i>, Output=ColorBranch, Error=ParseError> {
+  preceded(
+    ws_tag!("color"),
     parse_bk_arglist(),
-  ).parse_complete(input)?;
+  ).map_res(|args| {
+    if args.len() != 3 {
+      return Err(ParseError::Custom(format!("expected 3 arguments for color(), got {}", args.len())));
+    }
 
-  if args.len() != 3 {
-    return Err(nom::Err::Error(ParseError::Custom(format!("expected 3 arguments for color(), got {}", args.len()))));
-  }
+    let mut args = args.into_iter();
 
-  let mut args = args.into_iter();
+    let r = args.next().unwrap();
+    let g = args.next().unwrap();
+    let b = args.next().unwrap();
 
-  let r = args.next().unwrap();
-  let g = args.next().unwrap();
-  let b = args.next().unwrap();
-
-  let color = ColorBranch {
-    r: Box::new(r),
-    g: Box::new(g),
-    b: Box::new(b),
-  };
-
-  Ok((rest, color))
+    Ok(ColorBranch {
+      r: Box::new(r),
+      g: Box::new(g),
+      b: Box::new(b),
+    })
+  })
 }
 
 fn parse_bk_color<'i>() -> impl Parser<ParseIn<'i>, Output=BranchKind, Error=ParseError> {
-  parse_color.map(|c| BranchKind::Color(c))
+  parse_color().map(|c| BranchKind::Color(c))
 }
 
 fn parse_fn_branch<'i>() -> impl Parser<ParseIn<'i>, Output=FnBranch, Error=ParseError> {
@@ -602,43 +602,43 @@ fn parse_fn_branch<'i>() -> impl Parser<ParseIn<'i>, Output=FnBranch, Error=Pars
     match f {
       "rand" => {
         Ok::<FnBranch, ParseError>(FnBranch::Random)
-      },
+      }
       "sin" => {
         ensure_args_len(&args, 1)?;
         let arg = args.into_iter().next().unwrap();
         Ok::<FnBranch, ParseError>(FnBranch::Sin(Box::new(arg)))
-      },
+      }
       "cos" => {
         ensure_args_len(&args, 1)?;
         let arg = args.into_iter().next().unwrap();
         Ok::<FnBranch, ParseError>(FnBranch::Cos(Box::new(arg)))
-      },
+      }
       "sqrt" => {
         ensure_args_len(&args, 1)?;
         let arg = args.into_iter().next().unwrap();
         Ok::<FnBranch, ParseError>(FnBranch::Sqrt(Box::new(arg)))
-      },
+      }
       "add" => {
         ensure_args_len(&args, 2)?;
         let mut args = args.into_iter();
         let l = args.next().unwrap();
         let r = args.next().unwrap();
         Ok::<FnBranch, ParseError>(FnBranch::Add(Box::new(l), Box::new(r)))
-      },
+      }
       "mul" => {
         ensure_args_len(&args, 2)?;
         let mut args = args.into_iter();
         let l = args.next().unwrap();
         let r = args.next().unwrap();
         Ok::<FnBranch, ParseError>(FnBranch::Mul(Box::new(l), Box::new(r)))
-      },
+      }
       "mod" => {
         ensure_args_len(&args, 2)?;
         let mut args = args.into_iter();
         let l = args.next().unwrap();
         let r = args.next().unwrap();
         Ok::<FnBranch, ParseError>(FnBranch::Mod(Box::new(l), Box::new(r)))
-      },
+      }
       "mix" => {
         ensure_args_len(&args, 3)?;
         let mut args = args.into_iter();
@@ -646,7 +646,7 @@ fn parse_fn_branch<'i>() -> impl Parser<ParseIn<'i>, Output=FnBranch, Error=Pars
         let y = args.next().unwrap();
         let a = args.next().unwrap();
         Ok::<FnBranch, ParseError>(FnBranch::Mix(Box::new(x), Box::new(y), Box::new(a)))
-      },
+      }
       f => {
         Err(ParseError::UnknownFn(f.to_string()))
       }
@@ -681,12 +681,12 @@ fn parse_branch_weight<'i>() -> impl Parser<ParseIn<'i>, Output=u8, Error=ParseE
 }
 
 fn parse_weighted_branch_kind<'i>() -> impl Parser<ParseIn<'i>, Output=(u8, BranchKind), Error=ParseError> {
-  separated_pair(parse_branch_weight(), parse_ws_char(':'), parse_branch_kind)
+  separated_pair(parse_branch_weight(), ws_char!(':'), parse_branch_kind)
 }
 
 fn parse_branch<'i>() -> impl Parser<ParseIn<'i>, Output=Branch, Error=ParseError> {
   preceded(
-    parse_ws_char('|'),
+    ws_char!('|'),
     nom::branch::alt((
       parse_branch_kind.map(|kind| Branch { weight: 1, kind }),
       parse_weighted_branch_kind().map(|(weight, kind)| Branch { weight, kind }),
@@ -697,8 +697,8 @@ fn parse_branch<'i>() -> impl Parser<ParseIn<'i>, Output=Branch, Error=ParseErro
 fn parse_rule<'i>() -> impl Parser<ParseIn<'i>, Output=Rule, Error=ParseError> {
   (
     parse_rule_id(),
-    parse_ws_tag(":="),
-    terminated(many1(parse_branch()), parse_ws_char(';')),
+    ws_tag!(":="),
+    terminated(many1(parse_branch()), ws_char!(';')),
   ).map(|(id, _, branches)| Rule { id, branches })
 }
 
