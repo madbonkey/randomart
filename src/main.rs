@@ -229,7 +229,7 @@ async fn command_gui_main(grammar_path: PathBuf, depth: u8, seed: u64) {
       t += if ffmpeg.is_recording() {
         1.0 / 60.
       } else {
-        get_frame_time()
+        get_frame_time() / 4.
       };
     }
 
