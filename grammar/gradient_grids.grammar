@@ -1,0 +1,8 @@
+S  := | color(<RV>, <GV>, sqrt(<B>))
+      | color(<RH>, <GH>, sqrt(<B>));
+RV := | mod(@x, sqrt(@t));
+GV := | mod(@y, rand());
+RH := | mod(@x, rand());
+GH := | mod(@y, sqrt(@t));
+B  := | add(sqrt(<RV>), sqrt(<GV>))
+      | add(sqrt(<RH>), sqrt(<GH>));
