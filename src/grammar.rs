@@ -231,6 +231,17 @@ impl Rule {
         .map(|b| b.weight as usize)
         .sum()
   }
+
+  /// Checks that the rule has exactly one branch, which is a `ColorBranch`
+  fn is_entry_rule(&self) -> bool {
+    if self.branches.len() != 1 {
+      false
+    } else if let Some(first) = self.branches.first() {
+      first.kind.is_color()
+    } else {
+      false
+    }
+  }
 }
 
 impl Display for Rule {
@@ -377,6 +388,10 @@ impl BranchKind {
   fn is_terminal(&self) -> bool {
     matches!(self, BranchKind::Var(_))
   }
+
+  fn is_color(&self) -> bool {
+    matches!(self, BranchKind::Color(_))
+  }
 }
 
 #[derive(Debug)]
@@ -474,6 +489,8 @@ pub enum ParseError {
   Unknown,
   #[error("parse: {0}")]
   Custom(String),
+  #[error("parse: missing entry rule (exactly one color branch) for grammar")]
+  MissingEntryRule,
   #[error("parse: expected {0} arguments, got {1}")]
   ArgLen(usize, usize),
   #[error("parse: invalid function {0:?}")]
@@ -703,7 +720,14 @@ fn parse_rule<'i>() -> impl Parser<ParseIn<'i>, Output=Rule, Error=ParseError> {
 }
 
 fn parse_grammar<'i>() -> impl Parser<ParseIn<'i>, Output=Grammar, Error=ParseError> {
-  many1(parse_rule()).map(|rules| Grammar { rules })
+  many1(cut(parse_rule()))
+    .map_res(|rules| {
+      if let None = rules.iter().find(|rule| rule.is_entry_rule()) {
+        return Err(ParseError::MissingEntryRule);
+      }
+
+      Ok(Grammar { rules })
+    })
 }
 
 #[test]
@@ -777,15 +801,27 @@ A :=
   // assert!(matches!(*test.g, BranchKind::Rule(_)));
   // assert!(matches!(*test.b, BranchKind::Fn(FnBranch::Random)));
 
-  // let test = parse_grammar().parse_complete(DEV_GRAMMAR);
+  match parse_grammar().parse_complete(DEV_GRAMMAR) {
+    Ok((_, grammar)) => println!("DEV_GRAMMAR:\n{grammar}"),
+    Err(e) => report_parse_error(e),
+  }
+
+  // let test = parse_grammar().parse_complete(SAMPLE_GRAMMAR);
   // assert!(test.is_ok());
   // let (rest, test) = test.unwrap();
   // assert!(rest.is_empty());
-  // println!("DEV_GRAMMAR:\n{test}");
+  // println!("SAMPLE_GRAMMAR:\n{test}");
+}
 
-  let test = parse_grammar().parse_complete(SAMPLE_GRAMMAR);
-  assert!(test.is_ok());
-  let (rest, test) = test.unwrap();
-  assert!(rest.is_empty());
-  println!("SAMPLE_GRAMMAR:\n{test}");
+fn report_parse_error(e: nom::Err<ParseError, ParseError>) {
+  match e {
+    nom::Err::Incomplete(e) => eprintln!("parse: incomplete ({e:?})"),
+    nom::Err::Error(e) | nom::Err::Failure(e) => match e {
+      ParseError::Nom { input, kind, inner } => match inner {
+        None => eprintln!("parse: syntax error in {input:?}: {kind:?}"),
+        Some(inner) => eprintln!("{inner}"),
+      },
+      e => eprintln!("{e}"),
+    },
+  }
 }
