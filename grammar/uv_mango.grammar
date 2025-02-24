@@ -1,11 +1,11 @@
 E :=
-  | color(<R>, <G>, <B>);
+  | color(<RA>, <GA>, <B>)
+  | color(<RB>, <GB>, <B>);
 
-R :=
-  | @x;
+RA := | @x;
+GA := | @y;
 
-G :=
-  | @y;
+RB := | @y;
+GB := | @x;
 
-B :=
-  | const(0.0);
+B  := | const(0.0);

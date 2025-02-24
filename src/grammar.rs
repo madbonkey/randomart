@@ -275,13 +275,8 @@ impl Rule {
 
   /// Checks that the rule has exactly one branch, which is a `ColorBranch`
   fn is_entry_rule(&self) -> bool {
-    if self.branches.len() != 1 {
-      false
-    } else if let Some(first) = self.branches.first() {
-      first.kind.is_color()
-    } else {
-      false
-    }
+    !self.branches.is_empty()
+      && self.branches.iter().all(|b| b.kind.is_color())
   }
 }
 
