@@ -329,6 +329,7 @@ impl Branch {
 pub enum BranchKind {
   Rule(RuleId),
   Var(VarId),
+  Const(f32),
   Fn(FnBranch),
   Color(ColorBranch),
 }
@@ -344,6 +345,9 @@ impl Display for BranchKind {
       Self::Var(var) => {
         f.write_char('@')?;
         f.write_str(var)?;
+      }
+      Self::Const(c) => {
+        f.write_fmt(format_args!("const({c:.})"))?;
       }
       Self::Fn(fb) => {
         Display::fmt(fb, f)?;
@@ -375,6 +379,9 @@ impl BranchKind {
           v => return Err(GenError::VarNotFound(v.to_string())),
         };
         Ok(Node::from(v))
+      }
+      BranchKind::Const(c) => {
+        Ok(Node::from(ScalarNode::new(*c)))
       }
       BranchKind::Fn(f) => {
         match f {
@@ -527,6 +534,7 @@ pub mod parse {
   use nom::character::complete::alpha1;
   use nom::error::{ErrorKind, FromExternalError};
   use nom::multi::{many1, separated_list0};
+  use nom::number::float;
   use nom::Parser;
   use nom::sequence::{delimited, preceded, separated_pair, terminated};
 
@@ -661,6 +669,22 @@ pub mod parse {
     })
   }
 
+  fn parse_bk_const<'i>() -> impl Parser<ParseIn<'i>, Output=BranchKind, Error=ParseError> {
+    preceded(
+      ws_tag!("const"),
+      delimited(
+        ws_char!('('),
+        float().map_res(|c| {
+          if c < -1.0 || c > 1.0 {
+            return Err(ParseError::Custom(format!("constants must be in the range -1..1 (got {c})")));
+          }
+          Ok(BranchKind::Const(c))
+        }),
+        ws_char!(')'),
+      )
+    )
+  }
+
   fn parse_bk_color<'i>() -> impl Parser<ParseIn<'i>, Output=BranchKind, Error=ParseError> {
     parse_color().map(|c| BranchKind::Color(c))
   }
@@ -731,6 +755,7 @@ pub mod parse {
     nom::branch::alt((
       parse_bk_rule_id_ref(),
       parse_bk_var_id(),
+      parse_bk_const(),
       parse_bk_color(),
       parse_bk_fn(),
     )).parse_complete(input)
