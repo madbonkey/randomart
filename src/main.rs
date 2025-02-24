@@ -104,10 +104,15 @@ fn command_generate(
   tracing::info!("Image count: {}", num_images);
 
   let mut rng = seeded_rng(seed);
-  let Ok(grammar) = Grammar::read_from_path(&grammar_path) else {
-    tracing::error!("Failed loading grammar from path {grammar_path:?}");
-    std::process::exit(1);
+
+  let grammar = match Grammar::read_from_path(&grammar_path) {
+    Ok(grammar) => grammar,
+    Err(e) => {
+      tracing::error!("Failed loading grammar from path {grammar_path:?}: {e}");
+      std::process::exit(1);
+    },
   };
+
   let size = size as u32;
   let scale = 1f32 / size as f32;
 
@@ -192,9 +197,12 @@ async fn command_gui_main(grammar_path: PathBuf, depth: u8, seed: u64) {
   let mut seed = seed;
   let mut rng = seeded_rng(seed);
 
-  let Ok(grammar) = Grammar::read_from_path(&grammar_path) else {
-    tracing::error!("Failed loading grammar from path {grammar_path:?}");
-    std::process::exit(1);
+  let grammar = match Grammar::read_from_path(&grammar_path) {
+    Ok(grammar) => grammar,
+    Err(e) => {
+      tracing::error!("Failed loading grammar from path {grammar_path:?}: {e}");
+      std::process::exit(1);
+    },
   };
 
   tracing::debug!("Generator grammar:\n{grammar}");
