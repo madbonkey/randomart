@@ -28,6 +28,10 @@ pub struct Cli {
 enum Command {
   /// Generate random art images and save to disk
   Generate {
+    /// The .grammar file to use for generation
+    #[arg(short, long)]
+    grammar: PathBuf,
+
     /// Depth guide value of the function generation
     #[arg(short, long, default_value_t = 55)]
     depth: u8,
@@ -67,12 +71,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
   match cli.command {
     Command::Generate {
+      grammar,
       depth,
       size,
       num_images,
       seed,
     } => {
-      command_generate(depth, size, num_images, seed)?;
+      command_generate(grammar, depth, size, num_images, seed)?;
     }
     Command::Gui { grammar, depth, seed } => {
       let seed = seed.unwrap_or_else(|| rng().random());
@@ -87,6 +92,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 // ---
 
 fn command_generate(
+  grammar_path: PathBuf,
   depth: u8,
   size: u16,
   num_images: u16,
@@ -98,7 +104,10 @@ fn command_generate(
   tracing::info!("Image count: {}", num_images);
 
   let mut rng = seeded_rng(seed);
-  let grammar = Grammar::new_sample();
+  let Ok(grammar) = Grammar::read_from_path(&grammar_path) else {
+    tracing::error!("Failed loading grammar from path {grammar_path:?}");
+    std::process::exit(1);
+  };
   let size = size as u32;
   let scale = 1f32 / size as f32;
 
