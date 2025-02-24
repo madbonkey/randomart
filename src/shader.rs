@@ -48,6 +48,7 @@ const FRAGMENT_SHADER_TIME_VAR: &str = "t";
 
 pub enum TimeWave {
   Sine,
+  Cosine,
   Triangle,
 }
 
@@ -59,6 +60,7 @@ impl TimeWave {
   pub fn calc(&self, t: f32) -> f32 {
     match self {
       Self::Sine => Self::norm(t.sin()),
+      Self::Cosine => Self::norm(t.cos()),
       Self::Triangle => {
         let p = Self::PERIOD_TRIANGLE;
         let x = (t + 1.0) % p;
@@ -76,7 +78,7 @@ impl TimeWave {
   #[inline(always)]
   pub fn oscillation_period(&self) -> f32 {
     match self {
-      Self::Sine => Self::PERIOD_SINE,
+      Self::Sine | Self::Cosine => Self::PERIOD_SINE,
       Self::Triangle => Self::PERIOD_TRIANGLE,
     }
   }
@@ -103,7 +105,7 @@ impl ShaderMaterial {
     history.push(top);
 
     Self {
-      time_wave: TimeWave::Triangle,
+      time_wave: TimeWave::Cosine,
       current: 0,
       total: 1,
       history,
