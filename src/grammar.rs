@@ -128,7 +128,7 @@ impl Grammar {
   }
 
   pub fn generate_ast(&self, rng: &mut impl Rng, depth: isize) -> Result<Ast, GenError> {
-    let entry_rule = self.find_entry_rule().ok_or_else(|| GenError::EntryRuleNotFound)?;
+    let entry_rule = self.find_entry_rule().ok_or(GenError::EntryRuleNotFound)?;
     tracing::debug!("using rule {:?} as entry rule", &entry_rule.id);
     let node = self.generate_node(rng, &entry_rule.id, depth)?;
 
@@ -611,7 +611,7 @@ pub mod parse {
   }
 
   fn parse_bk_rule_id_ref<'i>() -> impl Parser<ParseIn<'i>, Output=BranchKind, Error=ParseError> {
-    parse_rule_id_ref().map(|rule_id| BranchKind::Rule(rule_id))
+    parse_rule_id_ref().map(BranchKind::Rule)
   }
 
   fn parse_var_id<'i>() -> impl Parser<ParseIn<'i>, Output=VarId, Error=ParseError> {
@@ -622,10 +622,10 @@ pub mod parse {
   }
 
   fn parse_bk_var_id<'i>() -> impl Parser<ParseIn<'i>, Output=BranchKind, Error=ParseError> {
-    parse_var_id().map(|var_id| BranchKind::Var(var_id))
+    parse_var_id().map(BranchKind::Var)
   }
 
-  fn ensure_args_len(args: &Vec<BranchKind>, n: usize) -> Result<(), ParseError> {
+  fn ensure_args_len(args: &[BranchKind], n: usize) -> Result<(), ParseError> {
     if args.len() != n {
       return Err(ParseError::ArgLen(n, args.len()));
     }
@@ -670,7 +670,7 @@ pub mod parse {
       delimited(
         ws_char!('('),
         float().map_res(|c| {
-          if c < -1.0 || c > 1.0 {
+          if !(-1.0..=1.0).contains(&c) {
             return Err(ParseError::Custom(format!("constants must be in the range -1..1 (got {c})")));
           }
           Ok(BranchKind::Const(c))
@@ -681,7 +681,7 @@ pub mod parse {
   }
 
   fn parse_bk_color<'i>() -> impl Parser<ParseIn<'i>, Output=BranchKind, Error=ParseError> {
-    parse_color().map(|c| BranchKind::Color(c))
+    parse_color().map(BranchKind::Color)
   }
 
   // TODO: better error reporting on invalid fn names (currently only reports the branch in which the failure occured)
@@ -743,7 +743,7 @@ pub mod parse {
   }
 
   fn parse_bk_fn<'i>() -> impl Parser<ParseIn<'i>, Output=BranchKind, Error=ParseError> {
-    parse_fn_branch().map(|f| BranchKind::Fn(f))
+    parse_fn_branch().map(BranchKind::Fn)
   }
 
   fn parse_branch_kind(input: ParseIn) -> ParseRes<BranchKind> {
@@ -758,11 +758,11 @@ pub mod parse {
 
   fn parse_branch_weight<'i>() -> impl Parser<ParseIn<'i>, Output=u8, Error=ParseError> {
     digit1().map_res(|r: ParseIn<'i>| {
-      let weight = u8::from_str_radix(r, 10)
+      let weight = r.parse::<u8>()
         .map_err(|e| ParseError::Custom(format!("{e}")))?;
 
       if weight == 0 {
-        return Err(ParseError::Custom(format!("Weight cannot be zero")));
+        return Err(ParseError::Custom("Weight cannot be zero".to_string()));
       }
 
       Ok(weight)
@@ -794,7 +794,7 @@ pub mod parse {
   pub(super) fn parse_grammar<'i>() -> impl Parser<ParseIn<'i>, Output=Grammar, Error=ParseError> {
     terminated(many1(parse_rule()), nom::combinator::eof)
       .map_res(|rules| {
-        if let None = rules.iter().find(|rule| rule.is_entry_rule()) {
+        if !rules.iter().any(|rule| rule.is_entry_rule()) {
           return Err(ParseError::MissingEntryRule);
         }
 
