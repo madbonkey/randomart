@@ -487,7 +487,7 @@ impl Display for FnBranch {
 pub enum ParseError {
   #[error("parse: unknown error")]
   Unknown,
-  #[error("parse: {0}")]
+  #[error("parse (custom): {0}")]
   Custom(String),
   #[error("parse: missing entry rule (exactly one color branch) for grammar")]
   MissingEntryRule,
@@ -495,7 +495,7 @@ pub enum ParseError {
   ArgLen(usize, usize),
   #[error("parse: invalid function {0:?}")]
   UnknownFn(String),
-  #[error("parse: kind {kind:?} in input {input:?}")]
+  #[error("parse (nom): {kind:?} in input {input:?}")]
   Nom {
     input: String,
     kind: ErrorKind,
@@ -514,8 +514,8 @@ impl nom::error::ParseError<ParseIn<'_>> for ParseError {
 }
 
 impl FromExternalError<ParseIn<'_>, ParseError> for ParseError {
-  fn from_external_error(input: ParseIn<'_>, kind: ErrorKind, _e: ParseError) -> Self {
-    Self::Nom { input: input.to_string(), kind, inner: None }
+  fn from_external_error(input: ParseIn<'_>, kind: ErrorKind, e: ParseError) -> Self {
+    Self::Nom { input: input.to_string(), kind, inner: Some(Box::new(e)) }
   }
 }
 
@@ -614,6 +614,7 @@ fn parse_bk_color<'i>() -> impl Parser<ParseIn<'i>, Output=BranchKind, Error=Par
   parse_color().map(|c| BranchKind::Color(c))
 }
 
+// TODO: better error reporting on invalid fn names (currently only reports the branch in which the failure occured)
 fn parse_fn_branch<'i>() -> impl Parser<ParseIn<'i>, Output=FnBranch, Error=ParseError> {
   (alpha1, parse_bk_arglist()).map_res(|(f, args)| {
     match f {
@@ -712,15 +713,15 @@ fn parse_branch<'i>() -> impl Parser<ParseIn<'i>, Output=Branch, Error=ParseErro
 }
 
 fn parse_rule<'i>() -> impl Parser<ParseIn<'i>, Output=Rule, Error=ParseError> {
-  (
+  separated_pair(
     parse_rule_id(),
     ws_tag!(":="),
     terminated(many1(parse_branch()), ws_char!(';')),
-  ).map(|(id, _, branches)| Rule { id, branches })
+  ).map(|(id, branches)| Rule { id, branches })
 }
 
 fn parse_grammar<'i>() -> impl Parser<ParseIn<'i>, Output=Grammar, Error=ParseError> {
-  many1(cut(parse_rule()))
+  terminated(many1(parse_rule()), nom::combinator::eof)
     .map_res(|rules| {
       if let None = rules.iter().find(|rule| rule.is_entry_rule()) {
         return Err(ParseError::MissingEntryRule);
@@ -801,6 +802,11 @@ A :=
   // assert!(matches!(*test.g, BranchKind::Rule(_)));
   // assert!(matches!(*test.b, BranchKind::Fn(FnBranch::Random)));
 
+  match parse_grammar().parse_complete(SAMPLE_GRAMMAR) {
+    Ok((_, grammar)) => println!("SAMPLE_GRAMMAR:\n{grammar}"),
+    Err(e) => report_parse_error(e),
+  }
+
   match parse_grammar().parse_complete(DEV_GRAMMAR) {
     Ok((_, grammar)) => println!("DEV_GRAMMAR:\n{grammar}"),
     Err(e) => report_parse_error(e),
@@ -816,9 +822,9 @@ A :=
 fn report_parse_error(e: nom::Err<ParseError, ParseError>) {
   match e {
     nom::Err::Incomplete(e) => eprintln!("parse: incomplete ({e:?})"),
-    nom::Err::Error(e) | nom::Err::Failure(e) => match e {
-      ParseError::Nom { input, kind, inner } => match inner {
-        None => eprintln!("parse: syntax error in {input:?}: {kind:?}"),
+    nom::Err::Error(e) | nom::Err::Failure(e) => match &e {
+      ParseError::Nom { inner, .. } => match inner {
+        None => eprintln!("{e}"),
         Some(inner) => eprintln!("{inner}"),
       },
       e => eprintln!("{e}"),
