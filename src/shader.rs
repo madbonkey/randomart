@@ -36,7 +36,9 @@ const FRAGMENT_SHADER_TEMPLATE: &str = /*language=glsl*/
   void main() {
     float x = uv.x;
     float y = uv.y;
+    // ---
     // ___INSERT_MARKER___
+    // ---
     gl_FragColor.a = 1.0;
   }
 ";
@@ -176,8 +178,12 @@ fn load_shader_material(grammar: &Grammar, rng: &mut impl Rng, depth: isize) -> 
   let mut ast = grammar.generate_ast(rng, depth).expect("ast generation");
   ast.optimize();
 
+  tracing::debug!("Generated AST: {ast}");
+
   let vertex_shader = DEFAULT_VERTEX_SHADER.to_string();
   let fragment_shader = compile_fragment_shader(&ast);
+
+  tracing::debug!("Generated fragment shader: {fragment_shader}");
 
   let material = load_material(
     ShaderSource::Glsl {
@@ -218,8 +224,8 @@ fn compile_fragment_shader(ast: &Ast) -> String {
   let b = compile_fragment_shader_node_temp(b);
 
   writeln!(&mut s, "gl_FragColor.r = {r};").expect("write red channel expression");
-  writeln!(&mut s, "gl_FragColor.g = {g};").expect("write green channel expression");
-  write!(&mut s, "gl_FragColor.b = {b};").expect("write blue channel expression");
+  writeln!(&mut s, "    gl_FragColor.g = {g};").expect("write green channel expression");
+  write!(&mut s, "    gl_FragColor.b = {b};").expect("write blue channel expression");
 
   s.push_str(fs_end);
 

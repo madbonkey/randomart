@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::time::SystemTime;
 
 use rand::{Rng, rng, SeedableRng};
@@ -45,6 +46,10 @@ enum Command {
   },
   /// Launch random art GUI to play around with
   Gui {
+    /// The .grammar file to use for generation
+    #[arg(short, long)]
+    grammar: PathBuf,
+
     /// Depth guide value of the function generation
     #[arg(short, long, default_value_t = 55)]
     depth: u8,
@@ -69,10 +74,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } => {
       command_generate(depth, size, num_images, seed)?;
     }
-    Command::Gui { depth, seed } => {
+    Command::Gui { grammar, depth, seed } => {
       let seed = seed.unwrap_or_else(|| rng().random());
 
-      command_gui(depth, seed)?;
+      command_gui(grammar, depth, seed)?;
     }
   }
 
@@ -149,7 +154,7 @@ fn command_generate(
   Ok(())
 }
 
-fn command_gui(depth: u8, seed: u64) -> Result<(), Box<dyn std::error::Error>> {
+fn command_gui(grammar_path: PathBuf, depth: u8, seed: u64) -> Result<(), Box<dyn std::error::Error>> {
   let conf = macroquad::window::Conf {
     window_title: "Random Art".to_owned(),
     window_width: 720,
@@ -159,12 +164,12 @@ fn command_gui(depth: u8, seed: u64) -> Result<(), Box<dyn std::error::Error>> {
     ..Default::default()
   };
 
-  macroquad::Window::from_config(conf, command_gui_main(depth, seed));
+  macroquad::Window::from_config(conf, command_gui_main(grammar_path, depth, seed));
 
   Ok(())
 }
 
-async fn command_gui_main(depth: u8, seed: u64) {
+async fn command_gui_main(grammar_path: PathBuf, depth: u8, seed: u64) {
   use macroquad::prelude::*;
 
   const MIN_DEPTH: isize = 5;
@@ -178,9 +183,12 @@ async fn command_gui_main(depth: u8, seed: u64) {
   let mut seed = seed;
   let mut rng = seeded_rng(seed);
 
-  let grammar = Grammar::new_sample();
+  let Ok(grammar) = Grammar::read_from_path(&grammar_path) else {
+    tracing::error!("Failed loading grammar from path {grammar_path:?}");
+    std::process::exit(1);
+  };
 
-  tracing::info!("Generator grammar:\n{grammar}");
+  tracing::debug!("Generator grammar:\n{grammar}");
 
   let mut shader_material = ShaderMaterial::new(&grammar, &mut rng, depth);
 
